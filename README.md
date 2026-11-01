@@ -1,25 +1,85 @@
-# State of Decay: Year-One — mod cooperativo (protótipo)
+<div align="center">
 
-Mod que adiciona multiplayer cooperativo ao State of Decay: Year-One Survival Edition (Steam, build 845221), começando pelo modo Breakdown.
+# 🧟 State of Decay: Year-One — Co-op Mod
 
-**Projeto privado, todos os direitos reservados. Veja [LICENSE](LICENSE).**
+**Multiplayer cooperativo para o State of Decay: Year-One Survival Edition (PC/Steam)**
 
-## Estado
+Jogue o modo **Breakdown** junto com um amigo: dois sobreviventes no mesmo mundo.
 
-O host e o cliente se conectam, e cada um vê o outro jogador como personagem animado, com posição e rotação sincronizadas. Detalhes em [docs/PROGRESSO.md](docs/PROGRESSO.md).
+![Status](https://img.shields.io/badge/status-prot%C3%B3tipo-orange)
+![Plataforma](https://img.shields.io/badge/plataforma-Windows%20%7C%20Steam-blue)
+![Jogo](https://img.shields.io/badge/build%20do%20jogo-845221-lightgrey)
+![Licença](https://img.shields.io/badge/licen%C3%A7a-todos%20os%20direitos%20reservados-red)
 
-## Estrutura
+</div>
+
+---
+
+## 📌 Sobre
+
+O State of Decay original é single-player. Este mod adiciona uma camada de rede ao jogo por meio de uma DLL própria, sem alterar os arquivos originais. Cada jogador vê o outro dentro do mundo, com movimento e animação sincronizados.
+
+> ⚠️ **Projeto em desenvolvimento.** Ainda é um protótipo: por enquanto só os jogadores são sincronizados. Zumbis, combate, inventário e veículos ainda não.
+
+## ✅ O que já funciona
+
+- [x] Duas instâncias do jogo abertas ao mesmo tempo, no modo Breakdown
+- [x] Conexão host ↔ cliente pela rede (UDP)
+- [x] Cliente entra na sessão do host
+- [x] Posição e rotação dos jogadores sincronizadas (20 atualizações/s, interpoladas)
+- [x] O outro jogador aparece no seu mundo como personagem animado (parado, andando, correndo, sprint)
+
+## 🛠️ Próximos passos
+
+- [ ] Combate e dano
+- [ ] Zumbis compartilhados (host como autoridade)
+- [ ] Inventário e itens
+- [ ] Veículos
+- [ ] Conexão pela internet (Steam), sem precisar abrir portas
+
+Detalhes técnicos e histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
+
+---
+
+## 💚 Apoie o projeto
+
+Este mod é **gratuito** e eu **não cobro nada** por ele.
+Se você curtir o projeto e quiser ajudar com **qualquer quantia**, é muito bem-vindo. Toda ajuda me incentiva a continuar desenvolvendo! 🙏
+
+<div align="center">
+
+<img src="docs/assets/pix-qrcode.png" alt="QR Code PIX para doações" width="260">
+
+**PIX — chave aleatória**
+
+```
+a0c80cfc-ec1f-4183-9b24-1c29d5a50471
+```
+
+</div>
+
+---
+
+## 📁 Estrutura do projeto
 
 | Pasta/arquivo | Conteúdo |
 |---|---|
-| `src/` | DLL do mod (`dinput8.dll` proxy, x86): `core/` (log, config, relógio, janela), `game/` (endereços do motor, jogador local, fantoche, hooks por frame), `net/` (protocolo UDP e sessão), `proxy/` |
-| `build.ps1` | Compila `build\dinput8.dll` com o llvm-mingw de `tools\` |
-| `install.ps1` | Instala/remove o mod nas cópias de teste (`testenv\host`, `testenv\client`) |
-| `launch.ps1` / `tile_windows.ps1` | Abre as duas cópias lado a lado |
-| `analysis/ghidra_scripts/`, `analysis/run_ghidra_script.ps1` | Scripts de engenharia reversa reproduzíveis |
-| `tools/analysis/` | Scripts Python de análise dos arquivos do jogo |
-| `docs/` | Relatório técnico, endereços, protocolo, ambiente de testes e progresso |
+| `src/` | DLL do mod (proxy de `dinput8.dll`, x86): `core/` (log, configuração, relógio, janela), `game/` (motor, jogador local, personagem remoto, hooks por frame), `net/` (protocolo UDP e sessão), `proxy/` |
+| `build.ps1` | Compila `build\dinput8.dll` |
+| `install.ps1` | Instala/remove o mod nas cópias de teste |
+| `launch.ps1` / `tile_windows.ps1` | Abre as duas cópias do jogo lado a lado |
+| `analysis/` | Scripts de engenharia reversa (Ghidra) |
+| `tools/analysis/` | Scripts de análise dos arquivos do jogo |
+| `docs/` | Relatório técnico, endereços do motor, protocolo de rede, ambiente de testes e progresso |
 
-## O que NÃO está no repositório
+### O que não está no repositório
 
-Arquivos do jogo, o executável desempacotado, o projeto do Ghidra e o código descompilado ficam só na máquina local, porque são da Undead Labs/Microsoft. As ferramentas de terceiros também ficam fora (Ghidra, JDK, llvm-mingw, Steamless, MinHook); veja versões e hashes em [docs/AMBIENTE_DE_TESTES.md](docs/AMBIENTE_DE_TESTES.md).
+Arquivos do jogo, o executável desempacotado, o projeto do Ghidra e o código descompilado ficam só na máquina local, porque são propriedade da Undead Labs/Microsoft. As ferramentas de terceiros (Ghidra, JDK, llvm-mingw, Steamless, MinHook) também ficam fora; as versões e os hashes estão em [docs/AMBIENTE_DE_TESTES.md](docs/AMBIENTE_DE_TESTES.md).
+
+---
+
+## ⚖️ Licença e aviso
+
+© 2026 Luassushiman. **Todos os direitos reservados.** É proibido copiar, modificar ou redistribuir este código sem autorização. Veja [LICENSE](LICENSE).
+
+*State of Decay* é marca registrada da Microsoft / Undead Labs. Este é um projeto de fã, independente, sem afiliação com a Microsoft ou a Undead Labs e sem endosso delas. É preciso ter o jogo original para usar o mod.
