@@ -43,6 +43,7 @@ Config loadConfig() {
     if (c.positionLogIntervalMs < 50) c.positionLogIntervalMs = 50;
     c.keepRunningUnfocused = GetPrivateProfileIntW(L"debug", L"keep_running_unfocused", 0, ini.c_str()) != 0;
     c.maxFps = GetPrivateProfileIntW(L"debug", L"max_fps", 60, ini.c_str());
+    c.luaCommandFile = GetPrivateProfileIntW(L"debug", L"lua_command_file", 1, ini.c_str()) != 0;
     c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 1, ini.c_str()) != 0;
     c.puppetModel = readString(ini, L"puppet", L"model", c.puppetModel);
     c.mirrorLocal = GetPrivateProfileIntW(L"puppet", L"mirror_local", 0, ini.c_str()) != 0;

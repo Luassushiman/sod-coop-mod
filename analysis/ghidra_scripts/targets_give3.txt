@@ -1,0 +1,3 @@
+com_addGun
+com_inventory
+ul_inventory

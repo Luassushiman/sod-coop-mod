@@ -1,0 +1,1 @@
+Gives specified item to the player!

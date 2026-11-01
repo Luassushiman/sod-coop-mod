@@ -1,0 +1,6 @@
+Gives all available items to the player!
+Gives special debug items to the player!
+GiveItem
+Inventory:AddItem
+Gives %s.
+Gives %d %s

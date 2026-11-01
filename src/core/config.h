@@ -41,6 +41,7 @@ struct Config {
     int positionLogIntervalMs = 1000;      // [debug] position_log_interval_ms
     bool keepRunningUnfocused = false;     // [debug] keep_running_unfocused: não pausa/desacelera sem foco
     int maxFps = 60;                       // [debug] max_fps: limite de FPS (sys_MaxFPS); 0 = não mexe
+    bool luaCommandFile = true;            // [debug] lua_command_file: executa sodcoop_cmd.lua (teste)
     bool animWatch = true;                 // [debug] anim_watch: registra as animações do jogador local
     // [puppet] modelo do fantoche (jogador remoto) e espelho local de teste
     std::string puppetModel = "characters/male/human/body/tshirt_jeans/variant/v01.cdf";  // model

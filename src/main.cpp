@@ -145,6 +145,25 @@ const std::string& localWeapon(bool inWorld, DWORD now) {
     return weapon;
 }
 
+// Ferramenta de teste: se existir sodcoop_cmd.lua ao lado do exe, executa uma vez
+// (thread principal) e apaga. Ex.: System.ExecuteCommand("i_giveitem Pistol_M9").
+void runCommandFile(DWORD now) {
+    static DWORD lastCheck = 0;
+    if (now - lastCheck < 1000) return;
+    lastCheck = now;
+    const std::wstring path = gameDirectory() + L"sodcoop_cmd.lua";
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return;
+    char buf[4096];
+    DWORD got = 0;
+    ReadFile(f, buf, sizeof(buf) - 1, &got, nullptr);
+    CloseHandle(f);
+    DeleteFileW(path.c_str());
+    buf[got] = 0;
+    const bool ok = engine::executeLua(buf, "sodcoop_cmd");
+    log::info("cmd: sodcoop_cmd.lua (%lu bytes) -> %s: %s", got, ok ? "OK" : "FALHOU", buf);
+}
+
 // Thread principal do jogo, uma vez por frame.
 void onFrame() {
     static engine::EntityId lastId = 0;
@@ -168,6 +187,7 @@ void onFrame() {
         log::info("cvars: sys_MaxFPS=%d -> %s", g_cfg.maxFps, ok ? "OK" : "FALHOU");
         fpsApplied = true;
     }
+    if (g_cfg.luaCommandFile) runCommandFile(now);
     engine::EntityId id = local_player::currentId();
     if (id != lastId) {
         lastId = id;

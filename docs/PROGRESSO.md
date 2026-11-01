@@ -70,7 +70,9 @@ Como funciona: quem joga envia o nome da ação e um contador; o fantoche toca a
 Ajustes da mira (2026-11-01):
 - Catálogo das 2561 animações do modelo gravado em `sodcoop_anims.txt` (ao lado do exe) na primeira leitura de nomes.
 - Mira para baixo (parado, arma longa): inclinação calculada do alvo do IK do remetente; abaixo de -15° (volta acima de -10°) usa `Story_ar02_Quarantine_Approach_Soldier_StandAim_Down`. ✅ confirmado pelo usuário com a espingarda.
-- Pistola: idle `relaxed_idle_pistol` + `Gun_shoot_revolver` parado em t=0,15 na camada 1 (braço estendido). ⚠️ **Não testado** (o personagem de teste não tinha pistola).
+- Pistola: idle `relaxed_idle_pistol` + `Gun_shoot_revolver` parado em t=0,15 na camada 1 (braço estendido). ⚠️ **Não testado** (o personagem de teste não tinha pistola). Pendente: `com_addGun Pistol_M9` foi executado no host (vai para o **estoque da comunidade**); pegar no armário de suprimentos quando o save do Breakdown tiver base e então testar.
+
+Ferramenta de teste: com `[debug] lua_command_file=1` (padrão), o mod executa uma vez e apaga `sodcoop_cmd.lua` da pasta do jogo (thread principal, a cada 1 s). Comandos de debug úteis do jogo: `com_add*` (estoque da comunidade), `zm_spawn`/`zm_spawnFreak` (zumbis), `i_giveitem` (não chega ao inventário da UL). **Desligar antes de qualquer versão pública.**
 
 Limitações da etapa 1c:
 - Mira para cima: o jogo não tem clipe; fica reta.
