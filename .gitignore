@@ -1,0 +1,34 @@
+# ---------------------------------------------------------------------------
+# NUNCA versionar conteúdo do jogo (propriedade da Undead Labs / Microsoft).
+# ---------------------------------------------------------------------------
+# Cópias da instalação usadas nos testes (exe, .pak, saves).
+/testenv/
+# Exe desempacotado (sem SteamStub), projeto Ghidra e saídas com código
+# descompilado/strings do jogo: só para análise local.
+/analysis/exe/
+/analysis/ghidra_project/
+/analysis/ghidra_settings/
+/analysis/out/
+/analysis/logs/
+/analysis/gtest/
+
+# ---------------------------------------------------------------------------
+# Ferramentas de terceiros baixadas (versões e hashes em docs/AMBIENTE_DE_TESTES.md)
+# ---------------------------------------------------------------------------
+/tools/downloads/
+/tools/ghidra/
+/tools/jdk/
+/tools/llvm-mingw/
+/tools/steamless/
+/tools/minhook/
+
+# Saída de compilação
+/build/
+
+# Arquivos gerados pelo jogo/mod dentro de cópias fora de testenv
+sodcoop_*.log
+*.ulsave
+
+# Sistema
+Thumbs.db
+desktop.ini

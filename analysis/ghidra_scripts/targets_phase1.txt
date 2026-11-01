@@ -1,0 +1,16 @@
+connect
+listen
+disconnect
+status
+sv_port
+sv_maxplayers
+sv_gamerules
+g_multiplayerEnableVehicles
+CCryAction: Loading next level '%s'.
+ULActor::SetHealth
+ULActor::CreateStateMachine
+NSZombieManager::CompileSpawnPoints
+CPlayerRotation::CPlayerRotation
+SinglePlayer
+IsMultiplayer
+pl_infinite_health

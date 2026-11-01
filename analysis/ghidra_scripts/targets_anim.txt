@@ -1,0 +1,4 @@
+AnimationDrivenMotion
+inplace
+StartAnimation
+CScriptBind_Entity::StartAnimation Anim %s not found in entity %s

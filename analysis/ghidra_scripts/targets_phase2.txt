@@ -1,0 +1,5 @@
+g_localActorId
+g_localActor
+g_localChannelId
+map
+Unload current map

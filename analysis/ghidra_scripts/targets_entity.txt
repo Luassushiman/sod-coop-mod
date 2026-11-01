@@ -1,0 +1,10 @@
+GetWorldPos
+SetWorldPos
+GetWorldAngles
+SetWorldAngles
+GetPos
+SetPos
+GetAngles
+SetAngles
+SpawnEntity
+GetEntity
