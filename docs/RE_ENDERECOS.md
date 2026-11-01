@@ -133,6 +133,17 @@ Registro dos bindings em `FUN_00B8DA10`. Os handlers abaixo chamam os métodos d
 | `Entity:GetAnimationLength(slot, nome)` | `IAnimationSet::GetAnimIDByName` (vtbl `+0x14`) + duração (`+0x64`); `ICharacterInstance::GetIAnimationSet` = vtbl `+0x24` | CONFIRMADO-ESTÁTICO | `0x00B94E30` |
 | Grafo de animação | ataques não passam pelo AnimationGraph: `UL_FullBody` tem `Action = StateMachine/idle` (máquina de estados nativa da UL) | FATO | `ul_fullbody.xml` |
 
+### Arma na mão e canal de texto (2026-11-01)
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| `IEntity::GetName()` | vtbl `+0x30`, `const char*` | VALIDADO-RUNTIME | bind `Entity:GetName` `0x00B97DB0`; canal de texto lê o nome de `sodcoop_text` |
+| `IEntity::GetSlotCount()` | vtbl `+0x11C` | VALIDADO-RUNTIME | bind `GetHelperPos` `0x00B96CA0`; item `Prybar` = 2 slots |
+| `IEntity::GetStatObj(slot)` | vtbl `+0x14C` | VALIDADO-RUNTIME | bind `GetSlotHelperPos` `0x00B989D0` |
+| `IStatObj::GetFilePath()` | vtbl `+0xA0` | VALIDADO-RUNTIME | bind `GetAttachmentCGF` `0x00B95020` (`GetCharacter(+0x144)` → `GetIAttachmentManager(+0x1C)` → `GetInterfaceByName(+0x18)` → `GetIAttachmentObject(+0x60)` → `GetIStatObj(+0x2C)` → `+0xA0`) |
+| Arma do jogador | entidade própria do item (`inventory:GetCurrentItem()`, ex. `Prybar025`), modelo de 3ª pessoa no **slot 1** (`objects/weapons/club/iron/club_prybar.cgf`); **não** é um `.cgf` preso no esqueleto (`GetAttachmentCGF` vazio em todos os pontos testados); punhos (`Fists`) = 0 slots | VALIDADO-RUNTIME | log `arma:` |
+| `Entity:CreateBoneAttachment(0, "weapon_bone", nome)` + `SetAttachmentCGF(0, nome, arquivo)` | prende o modelo na mão do fantoche na posição certa | VALIDADO-RUNTIME | confirmado pelo usuário |
+
 Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal_chop_fromright/fromleft` e `Strike_bat_ground_no_step*` (camada 0), pose de arma `weaponoffset_Bat` (camada 6), `additive_look_around*` (camada 4), `lipsync_*` (camada 5), `Item_ub_pistol_stow` (camada 1), pulos/quedas `Environmental_*` (camada 0).
 
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"

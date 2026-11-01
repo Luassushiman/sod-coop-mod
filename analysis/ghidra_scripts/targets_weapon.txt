@@ -1,0 +1,5 @@
+GetName
+SetName
+GetAttachmentCGF
+SetAttachmentCGF
+GetCurrentItem

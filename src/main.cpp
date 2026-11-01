@@ -104,6 +104,46 @@ void logSpeedHistogram(float speed, float dt, DWORD now) {
     for (float& s : seconds) s = 0;
 }
 
+// Arma na mão do jogador local (modelo .cgf), lida pelo Lua a cada 0,5 s.
+// O diagnóstico completo (item, pontos de fixação) vai para o log quando muda.
+const std::string& localWeapon(bool inWorld, DWORD now) {
+    static std::string weapon, lastDiag;
+    static DWORD lastPoll = 0;
+    if (!inWorld) {
+        weapon.clear();
+        return weapon;
+    }
+    if (now - lastPoll < 500) return weapon;
+    lastPoll = now;
+    std::string text;
+    if (!puppet::readLuaText("SodCoop.LocalWeapon()", text)) {
+        static int failures = 0;
+        if (++failures <= 3) log::warn("arma: leitura pelo Lua falhou");
+        return weapon;
+    }
+    const size_t bar = text.find('|');
+    const std::string itemName = text.substr(0, bar);
+    std::string diag = bar == std::string::npos ? "" : text.substr(bar + 1);
+    // Modelo = primeiro slot da entidade do item com .cgf carregado.
+    std::string model;
+    if (void* item = itemName.empty() ? nullptr : engine::findEntityByName(itemName.c_str())) {
+        const int slots = engine::getSlotCount(item);
+        for (int i = 0; i < slots && i < 8; ++i) {
+            const std::string path = engine::getSlotModelPath(item, i);
+            if (path.empty()) continue;
+            diag += " slot" + std::to_string(i) + "=" + path;
+            if (model.empty()) model = path;
+        }
+        diag += " slots=" + std::to_string(slots);
+    }
+    if (diag != lastDiag) {
+        lastDiag = diag;
+        log::info("arma: %s -> modelo '%s'", diag.c_str(), model.c_str());
+    }
+    weapon = model;
+    return weapon;
+}
+
 // Thread principal do jogo, uma vez por frame.
 void onFrame() {
     static engine::EntityId lastId = 0;
@@ -169,6 +209,7 @@ void onFrame() {
         const anim_watch::Action& action = anim_watch::currentAction();
         memcpy(mine.action, action.name, sizeof(mine.action));
         mine.actionSeq = action.seq;
+        snprintf(mine.weapon, sizeof(mine.weapon), "%s", localWeapon(settled, now).c_str());
     }
     net::setLocalState(mine);
 

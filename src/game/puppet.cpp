@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 
 #include "core/log.h"
 
@@ -77,6 +78,58 @@ function SodCoop.Report(a, b, c)
     SodCoop.probe = p
   end
   if p then p:SetWorldPos({ x = a, y = b, z = c }) end
+end
+-- Canal de texto Lua -> DLL: o texto vira o nome de uma entidade invisível
+-- ("sodcoop_text"), que a DLL acha pelo nome fixo e depois lê com IEntity::GetName.
+function SodCoop.TextReset()
+  local t = SodCoop.textEnt
+  if t == nil or System.GetEntity(t.id) == nil then
+    if BasicEntity == nil then Script.ReloadScript("Scripts/Entities/Physics/BasicEntity.lua") end
+    local props = new(BasicEntity.Properties)
+    props.object_Model = ""
+    t = System.SpawnEntity({ class = "BasicEntity", name = "sodcoop_text",
+                             position = { x = 0, y = 0, z = 5100 }, properties = props })
+    if not t then error("sodcoop: entidade de texto nao criada") end
+    SodCoop.textEnt = t
+  else
+    t:SetName("sodcoop_text")
+  end
+end
+function SodCoop.TextSet(s)
+  SodCoop.textEnt:SetName("=" .. tostring(s))  -- prefixo: nunca nome vazio
+end
+-- Arma do jogador local: devolve "nome da entidade do item|diagnóstico".
+-- O modelo fica na própria entidade do item (não é um .cgf preso no esqueleto);
+-- a DLL lê o arquivo dele nativamente. Os pontos de fixação ficam no diagnóstico.
+SodCoop.weaponAttachments = { "right_item_attachment", "left_item_attachment", "weapon", "weapon_bone",
+                              "laser_attachment", "back_item_attachment", "melee", "melee_weapon" }
+function SodCoop.LocalWeapon()
+  local p = g_localActorId and System.GetEntity(g_localActorId)
+  if not p then return "|sem jogador" end
+  local item = p.inventory and p.inventory:GetCurrentItem()
+  local diag = "item=" .. (item and (tostring(item.class) .. ":" .. tostring(item:GetName())) or "nil")
+  for _, a in ipairs(SodCoop.weaponAttachments) do
+    local cgf = p:GetAttachmentCGF(0, a)
+    if cgf and cgf ~= "" then diag = diag .. " " .. a .. "=" .. cgf end
+  end
+  if item and item.Properties then
+    for k, v in pairs(item.Properties) do
+      if type(v) == "string" and (string.find(v, "%.cgf") or string.find(v, "%.chr") or string.find(v, "%.cdf")) then
+        diag = diag .. " prop." .. k .. "=" .. v
+      end
+    end
+  end
+  return (item and item:GetName() or "") .. "|" .. diag
+end
+function SodCoop.SetPuppetWeapon(path)
+  if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
+  local e = SodCoop.puppet
+  e:DestroyAttachment(0, "sodcoop_weapon")
+  if path ~= "" then
+    e:CreateBoneAttachment(0, "weapon_bone", "sodcoop_weapon")
+    e:SetAttachmentCGF(0, "sodcoop_weapon", path)
+    if e:GetAttachmentCGF(0, "sodcoop_weapon") == nil then error("sodcoop: arma nao anexada: " .. path) end
+  end
 end
 function SodCoop.MovePuppet(x, y, z, yaw, bone)
   if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
@@ -155,6 +208,39 @@ bool playAnimation(const std::string& name, float speed, bool loop, float blendS
              loop ? "true" : "false", blendSec);
     bool ok = engine::executeLua(code, "sodcoop_anim");
     if (!ok) log::warn("puppet: animacao '%s' falhou", name.c_str());
+    return ok;
+}
+
+bool readLuaText(const char* expr, std::string& out) {
+    if (!ensureLuaHelpers() || !engine::executeLua("SodCoop.TextReset()", "sodcoop_text")) return false;
+    void* entity = engine::findEntityByName("sodcoop_text");
+    if (!entity) return false;
+    char code[512];
+    snprintf(code, sizeof(code), "SodCoop.TextSet(%s)", expr);
+    if (!engine::executeLua(code, "sodcoop_text")) return false;
+    const char* name = engine::getEntityName(entity);
+    if (name[0] != '=') return false;
+    out = name + 1;
+    return true;
+}
+
+bool isSafePath(const std::string& s) {
+    if (s.size() > 120) return false;
+    for (char c : s)
+        if (!isalnum(static_cast<unsigned char>(c)) && !strchr("_/.-", c)) return false;
+    return s.find("..") == std::string::npos;
+}
+
+bool setWeapon(const std::string& path) {
+    // Caminho vem da rede e vai para dentro de código Lua.
+    if (!isSafePath(path)) {
+        log::warn("puppet: caminho de arma recusado");
+        return false;
+    }
+    char code[256];
+    snprintf(code, sizeof(code), "SodCoop.SetPuppetWeapon(\"%s\")", path.c_str());
+    bool ok = engine::executeLua(code, "sodcoop_weapon");
+    log::info("puppet: arma '%s' -> %s", path.c_str(), ok ? "OK" : "FALHOU");
     return ok;
 }
 

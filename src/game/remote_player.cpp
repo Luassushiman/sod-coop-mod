@@ -171,6 +171,8 @@ float g_rate = 1.0f;
 DWORD g_lastRateMs = 0;
 uint16_t g_actionSeq = 0;  // última ação vista do remetente
 bool g_inAction = false;   // fantoche tocando uma ação (passos suspensos)
+std::string g_weapon;      // arma presa no fantoche
+DWORD g_weaponRetryMs = 0;
 
 void despawn(const char* reason) {
     if (!g_alive) return;
@@ -278,9 +280,16 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         g_gait = Gait::None;  // força tocar a animação no fantoche novo
         g_inAction = false;
         g_actionSeq = s.actionSeq;  // não repete uma ação que já passou
+        g_weapon.clear();
         if (!g_alive) g_retryAfterMs = now + 3000;
         else log::info("remote_player: fantoche do jogador %08X criado", remote.peerId);
         return;
+    }
+
+    // Arma: troca quando o outro lado troca (o estado mais recente, sem atraso).
+    if (remote.state.weapon != g_weapon && now >= g_weaponRetryMs) {
+        if (puppet::setWeapon(remote.state.weapon)) g_weapon = remote.state.weapon;
+        else g_weaponRetryMs = now + 5000;
     }
 
     // Ações (golpes, pulos...): tocam uma vez por cima da locomoção; ao terminar,

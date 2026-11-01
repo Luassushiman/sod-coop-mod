@@ -1,0 +1,4 @@
+GetSlotHelperPos
+GetHelperPos
+IsSlotValid
+GetSlotCount

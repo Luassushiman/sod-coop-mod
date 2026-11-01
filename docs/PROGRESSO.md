@@ -54,9 +54,15 @@ Limitações restantes da animação:
 
 Como funciona: quem joga envia o nome da ação e um contador; o fantoche toca a animação uma vez (blend 0,1 s, ritmo 1×), suspende a troca de passo e, quando a ação termina, volta à locomoção. O nome recebido só é aceito com letras, dígitos e `_` (vai para o Lua) e é conferido com `GetAnimationLength` (o modelo do fantoche precisa ter a animação).
 
+### Etapa 1b: arma na mão (2026-11-01) ✅
+
+- O Lua informa o item atual (`inventory:GetCurrentItem()`) por um **canal de texto** (nome da entidade `sodcoop_text`, lido com `IEntity::GetName`).
+- A DLL acha a entidade do item pelo nome e lê o modelo de 3ª pessoa (`GetStatObj(slot)` → `GetFilePath`), envia pela rede (v5) e o fantoche prende o `.cgf` no osso `weapon_bone`.
+- Testado com o pé de cabra (`club_prybar.cgf`): aparece na mão e some ao trocar para os punhos; confirmado pelo usuário.
+
 Limitações da etapa 1:
 - **Sem dano**: o golpe é só visual. Cada instância tem os próprios zumbis; dano depende dos zumbis compartilhados.
-- **Sem arma na mão** do fantoche (golpeia de mão vazia); a pose `weaponoffset_Bat` (camada 6) também não é replicada.
+- Arma na mão: ✅ (etapa 1b). A pose `weaponoffset_*` (camada 6) não é replicada; armas de fogo/itens com personagem (`.chr`) em vez de `.cgf` não foram testados.
 - Camadas superiores (1–15: parte de cima do corpo, aditivas) não são replicadas; só a camada 0.
 - A ação começa do início no fantoche (não sincroniza o tempo da animação) e respeita o atraso de interpolação (100 ms).
 
@@ -67,6 +73,5 @@ Limitações conhecidas da rede atual:
 - Cada instância roda o próprio mundo: zumbis, NPCs, loot e eventos **não** estão sincronizados. Só a posição/rotação dos jogadores é compartilhada.
 
 Limitações conhecidas do fantoche atual:
-- Golpeia de mão vazia (sem modelo de arma anexado).
 - O modelo é só o corpo (`.cdf` de body); pode aparecer sem cabeça.
 - O movimento usa uma chamada Lua por frame (`ExecuteBuffer` + compilação de um trecho pequeno). Basta para o protótipo; trocar por `IEntity::SetWorldTM` nativo (vtbl `+0x54`) quando o EntityId do fantoche for obtido no lado C++.

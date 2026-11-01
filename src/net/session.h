@@ -31,6 +31,7 @@ struct PlayerState {
     float speed = 0;  // m/s, horizontal
     char action[48] = {};  // ver StatePacket.action
     uint16_t actionSeq = 0;
+    char weapon[128] = {};  // ver StatePacket.weapon
 };
 
 struct RemoteState {

@@ -130,6 +130,29 @@ bool setAnimationDrivenMotion(void* entity, bool enabled) {
     return true;
 }
 
+const char* getEntityName(void* entity) {
+    if (!looksLikeObject(entity)) return "";
+    using Fn = const char*(__thiscall*)(void*);
+    const char* name = vfunc<Fn>(entity, vt::kEntity_GetName)(entity);
+    return isReadable(name, 1) ? name : "";
+}
+
+int getSlotCount(void* entity) {
+    if (!looksLikeObject(entity)) return 0;
+    using Fn = int(__thiscall*)(void*);
+    return vfunc<Fn>(entity, vt::kEntity_GetSlotCount)(entity);
+}
+
+const char* getSlotModelPath(void* entity, int slot) {
+    if (!looksLikeObject(entity)) return "";
+    using GetStatObj_t = void*(__thiscall*)(void*, int);
+    void* statObj = vfunc<GetStatObj_t>(entity, vt::kEntity_GetStatObj)(entity, slot);
+    if (!looksLikeObject(statObj)) return "";
+    using GetPath_t = const char*(__thiscall*)(void*);
+    const char* path = vfunc<GetPath_t>(statObj, vt::kStatObj_GetFilePath)(statObj);
+    return isReadable(path, 1) ? path : "";
+}
+
 bool getWorldTM(void* entity, Matrix34& out) {
     if (!looksLikeObject(entity)) return false;
     using Fn = const Matrix34*(__thiscall*)(void*);

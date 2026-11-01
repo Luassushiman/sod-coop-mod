@@ -39,6 +39,10 @@ namespace vt {
 inline constexpr size_t kScriptSystem_ExecuteBuffer = 0x18;  // bool (const char*, size_t, const char* desc, IScriptTable* env)
 inline constexpr size_t kEntitySystem_GetEntity = 0x28;  // IEntity* (EntityId)
 inline constexpr size_t kEntitySystem_FindEntityByName = 0x2C;  // IEntity* (const char*)
+inline constexpr size_t kEntity_GetName = 0x30;              // const char* () — bind Entity:GetName 0x00B97DB0
+inline constexpr size_t kEntity_GetSlotCount = 0x11C;         // int () — bind Entity:GetSlotCount / GetHelperPos
+inline constexpr size_t kEntity_GetStatObj = 0x14C;           // IStatObj* (int slot) — bind GetSlotHelperPos 0x00B989D0
+inline constexpr size_t kStatObj_GetFilePath = 0xA0;          // const char* () — bind GetAttachmentCGF 0x00B95020
 inline constexpr size_t kEntity_GetCharacter = 0x144;            // ICharacterInstance* (int slot)
 inline constexpr size_t kCharacter_GetISkeletonAnim = 0x10;      // ISkeletonAnim* ()
 inline constexpr size_t kEntity_SetWorldTM = 0x54;       // void (const Matrix34&, int flags)
@@ -75,6 +79,11 @@ void* findEntityByName(const char* name);
 // (animação no lugar). false se algum passo da cadeia falhar.
 bool setAnimationDrivenMotion(void* entity, bool enabled);
 bool getWorldTM(void* entity, Matrix34& out);
+// Nome atual da entidade ("" se inválida).
+const char* getEntityName(void* entity);
+int getSlotCount(void* entity);
+// Arquivo do modelo estático (.cgf) carregado no slot; "" se não houver.
+const char* getSlotModelPath(void* entity, int slot);
 bool getWorldAngles(void* entity, Vec3& out);
 
 }  // namespace sodcoop::engine
