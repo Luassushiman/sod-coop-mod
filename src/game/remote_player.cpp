@@ -168,6 +168,16 @@ float nominalSpeed(Gait g, const AnimConfig& a) {
 
 // Clipe de mira parada (rifle no ombro), nome do .chrparams (regra "Story_*").
 constexpr const char* kStandAimClip = "Story_ar02_Quarantine_Approach_Soldiers_StandAim";
+// Mesma cena, soldado mirando para baixo (não há versão para cima).
+constexpr const char* kStandAimDownClip = "Story_ar02_Quarantine_Approach_Soldier_StandAim_Down";
+// Pistola: não há pose de mira pronta. Idle com pistola no corpo e o tiro de
+// revólver parado no início (braço estendido) na camada 1.
+constexpr const char* kPistolIdleClip = "relaxed_idle_pistol";
+constexpr const char* kPistolAimPose = "Gun_shoot_revolver";
+constexpr float kPistolAimPoseTime = 0.15f;
+// Inclinação da mira (graus) a partir da qual usa a pose para baixo, com histerese.
+constexpr float kAimDownEnterDeg = -15.0f, kAimDownExitDeg = -10.0f;
+constexpr float kChestHeight = 1.5f;  // m acima dos pés, origem da mira
 constexpr const char* kWalkAimClip = "Test_hero_walk_forward_aim";
 constexpr const char* kRunAimClip = "Test_hero_run_forward_aim";
 
@@ -195,6 +205,8 @@ bool g_inAction = false;   // fantoche tocando uma ação (passos suspensos)
 std::string g_clip;        // animação em loop na camada 0 (passo ou postura base)
 uint16_t g_upperSeq = 0;   // última animação da camada 1 vista do remetente
 bool g_upperOn = false;    // camada 1 tocando no fantoche
+bool g_aimDown = false;    // mira inclinada para baixo (pose "down")
+bool g_pistolPose = false; // pose de mira de pistola aplicada (camada 1)
 std::string g_weapon;      // arma presa no fantoche
 DWORD g_weaponRetryMs = 0;
 
@@ -307,6 +319,7 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         g_weapon.clear();
         g_clip.clear();
         g_upperOn = false;
+        g_aimDown = g_pistolPose = false;
         g_upperSeq = static_cast<uint16_t>(s.upperSeq - 1);  // toca a camada 1 atual
         if (!g_alive) g_retryAfterMs = now + 3000;
         else log::info("remote_player: fantoche do jogador %08X criado", remote.peerId);
@@ -347,11 +360,21 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
     // clipe de corpo inteiro do próprio jogo com o rifle no ombro (cena da quarentena).
     const bool longGunAim = remote.state.aiming && isLongGunAimPose(remote.state.aimPose);
     const bool standAim = longGunAim && g_gait == Gait::Idle;
+    // Inclinação da mira pelo alvo do IK do remetente (relativo aos pés dele).
+    {
+        const float* o = remote.state.aimOffset;
+        const float pitch = std::atan2(o[2] - kChestHeight, std::sqrt(o[0] * o[0] + o[1] * o[1])) * 57.2958f;
+        const bool down = remote.state.aiming && (g_aimDown ? pitch < kAimDownExitDeg : pitch < kAimDownEnterDeg);
+        if (down != g_aimDown) log::info("remote_player: mira %s (%.0f graus)", down ? "para baixo" : "reta", pitch);
+        g_aimDown = down;
+    }
+    const bool pistolAim = remote.state.aiming && strcmp(remote.state.aimPose, "AimPoses_pistol") == 0;
     // Andando/correndo mirando: clipes "para frente com mira" do jogo (os mesmos
     // que o blend space _AIM_* usa), sem a direção lateral.
     const bool moveAim = longGunAim && g_gait != Gait::Idle && g_gait != Gait::None;
     if (!g_inAction) {
-        const std::string clip = standAim  ? std::string(kStandAimClip)
+        const std::string clip = standAim  ? std::string(g_aimDown ? kStandAimDownClip : kStandAimClip)
+                                 : (pistolAim && g_gait == Gait::Idle) ? std::string(kPistolIdleClip)
                                  : moveAim ? std::string(g_gait == Gait::Walk ? kWalkAimClip : kRunAimClip)
                                  : useBase ? std::string(s.base)
                                            : clipFor(g_gait, anim);
@@ -360,6 +383,15 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
             if (g_rate != 1.0f && puppet::setAnimationRate(1.0f)) g_rate = 1.0f;
             puppet::playAnimation(clip, 1.0f);  // falha já vai para o log
             g_clip = clip;  // não repete a cada frame se falhar
+        }
+    }
+
+    // Pistola mirando: braço estendido (pose fixa na camada 1), parado ou andando.
+    if (pistolAim != g_pistolPose) {
+        if (pistolAim) g_pistolPose = puppet::holdPose(kPistolAimPose, kPistolAimPoseTime, 1);
+        else {
+            puppet::stopLayer(1);
+            g_pistolPose = false;
         }
     }
 

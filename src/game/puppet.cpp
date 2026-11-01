@@ -55,6 +55,16 @@ function SodCoop.PlayPuppetAnim(name, speed, loop, blend, layer)
   e:StartAnimation(0, name, layer, blend, speed, loop)
   e:ForceCharacterUpdate(0, true)
 end
+-- Pose fixa: toca a animação parada no tempo normalizado t (velocidade 0, em loop).
+function SodCoop.HoldPuppetPose(name, t, layer)
+  if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
+  local e = SodCoop.puppet
+  local len = e:GetAnimationLength(0, name)
+  if not len or len <= 0 then error("sodcoop: animacao inexistente no fantoche: " .. name) end
+  e:StartAnimation(0, name, layer, 0.2, 0, true)
+  e:SetAnimationTime(0, layer, t)
+  e:ForceCharacterUpdate(0, true)
+end
 function SodCoop.StopPuppetLayer(layer)
   if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
   SodCoop.puppet:StopAnimation(0, layer)
@@ -262,6 +272,17 @@ bool readProbe(engine::Vec3& out) {
     if (!entity || !engine::getWorldTM(entity, tm)) return false;
     out = {tm.m[0][3], tm.m[1][3], tm.m[2][3]};
     return true;
+}
+
+bool holdPose(const std::string& name, float time, int layer) {
+    if (name.empty()) return false;
+    for (char c : name)
+        if (!isalnum(static_cast<unsigned char>(c)) && c != '_') return false;
+    char code[192];
+    snprintf(code, sizeof(code), "SodCoop.HoldPuppetPose(\"%s\", %.3f, %d)", name.c_str(), time, layer);
+    bool ok = engine::executeLua(code, "sodcoop_pose");
+    log::info("puppet: pose fixa '%s' t=%.2f camada %d -> %s", name.c_str(), time, layer, ok ? "OK" : "FALHOU");
+    return ok;
 }
 
 bool stopLayer(int layer) {

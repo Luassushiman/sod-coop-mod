@@ -102,6 +102,27 @@ void detectNameOffset(const char* headers, int count) {
               g_nameOffset, votes[0], votes[1], votes[2], votes[3], votes[4], dump);
 }
 
+// Catálogo de animações do modelo (uma vez), em sodcoop_anims.txt ao lado do exe:
+// referência para escolher clipes a tocar no fantoche.
+void dumpNames(const char* headers, int count) {
+    char path[MAX_PATH];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != '\\') --n;
+    snprintf(path + n, MAX_PATH - n, "sodcoop_anims.txt");
+    FILE* f = fopen(path, "w");
+    if (!f) return;
+    int written = 0;
+    for (int i = 0; i < count; ++i) {
+        const char* s = nullptr;
+        if (readAt(headers + i * kHeaderStride, g_nameOffset, s) && printable(s, 256)) {
+            fprintf(f, "%d\t%s\n", i, s);
+            ++written;
+        }
+    }
+    fclose(f);
+    log::info("anim_watch: %d nomes de animacao gravados em %s", written, path);
+}
+
 std::string animName(void* skel, int16_t animId) {
     char fallback[24];
     snprintf(fallback, sizeof(fallback), "#%d", animId);
@@ -113,7 +134,10 @@ std::string animName(void* skel, int16_t animId) {
         return fallback;
     const int count = dynArrayCount(headers);
     if (count <= 0 || count > 20000 || animId < 0 || animId >= count) return fallback;
-    if (g_nameOffset == -2) detectNameOffset(headers, count);
+    if (g_nameOffset == -2) {
+        detectNameOffset(headers, count);
+        if (g_nameOffset >= 0) dumpNames(headers, count);
+    }
     if (g_nameOffset < 0) return fallback;
     const char* s = nullptr;
     if (!readAt(headers + animId * kHeaderStride, g_nameOffset, s) || !printable(s, 256)) return fallback;

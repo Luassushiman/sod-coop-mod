@@ -67,9 +67,14 @@ Como funciona: quem joga envia o nome da ação e um contador; o fantoche toca a
 - Janela sem foco não pausa mais: `focus_guard` descarta `WM_ACTIVATE(WA_INACTIVE)`/`WM_ACTIVATEAPP(FALSE)`. Antes, o host abria o menu de pausa e o fantoche ficava "duro".
 - `sys_MaxFPS=60` por padrão (`[debug] max_fps`), por causa dos travamentos do PC com as duas cópias no menu.
 
+Ajustes da mira (2026-11-01):
+- Catálogo das 2561 animações do modelo gravado em `sodcoop_anims.txt` (ao lado do exe) na primeira leitura de nomes.
+- Mira para baixo (parado, arma longa): inclinação calculada do alvo do IK do remetente; abaixo de -15° (volta acima de -10°) usa `Story_ar02_Quarantine_Approach_Soldier_StandAim_Down`. ✅ confirmado pelo usuário com a espingarda.
+- Pistola: idle `relaxed_idle_pistol` + `Gun_shoot_revolver` parado em t=0,15 na camada 1 (braço estendido). ⚠️ **Não testado** (o personagem de teste não tinha pistola).
+
 Limitações da etapa 1c:
-- Mira só com arma longa (espingarda, rifle, fuzil, submetralhadora); pistola mira com a arma baixa.
-- Mira sempre horizontal e para frente: inclinação (cima/baixo) e andar de lado/de costas mirando não são representados.
+- Mira para cima: o jogo não tem clipe; fica reta.
+- Andar de lado/de costas mirando: só há clipes "para frente"; o fantoche usa o de frente.
 
 Limitações da etapa 1:
 - **Sem dano**: o golpe é só visual. Cada instância tem os próprios zumbis; dano depende dos zumbis compartilhados.

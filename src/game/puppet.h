@@ -28,6 +28,8 @@ bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone = "");
 // se o modelo tem a animação. O nome só pode ter letras, dígitos e '_'.
 // layer: camada do esqueleto (0 = corpo inteiro; 2 = parte de cima do remetente).
 bool playAnimation(const std::string& name, float speed, bool loop = true, float blendSec = 0.25f, int layer = 0);
+// Toca a animação parada no tempo normalizado time (0..1), em loop, na camada.
+bool holdPose(const std::string& name, float time, int layer);
 // Para a animação da camada (blend de saída padrão do motor).
 bool stopLayer(int layer);
 
