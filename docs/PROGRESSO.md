@@ -60,6 +60,17 @@ Como funciona: quem joga envia o nome da ação e um contador; o fantoche toca a
 - A DLL acha a entidade do item pelo nome e lê o modelo de 3ª pessoa (`GetStatObj(slot)` → `GetFilePath`), envia pela rede (v5) e o fantoche prende o `.cgf` no osso `weapon_bone`.
 - Testado com o pé de cabra (`club_prybar.cgf`): aparece na mão e some ao trocar para os punhos; confirmado pelo usuário.
 
+### Etapa 1c: mira, tiro e recarga (2026-11-01) ✅
+
+- Postura com arma (idle com espingarda) e parte de cima (segurar, tiro, recarga) replicadas por camadas; confirmado pelo usuário ("apareceu a arma na mão, tem a animação de recarga").
+- Mira: o jogo levanta a arma pelo IK de aim poses, que não roda no fantoche (`AnimObject`). Foram testados `SetAimIK` nativo e a aim pose como animação comum, sem efeito (documentado em `RE_ENDERECOS.md`). Solução: clipes do jogo com a arma no ombro — parado (`Story_..._StandAim`) e andando/correndo (`Test_hero_walk/run_forward_aim`); confirmado pelo usuário ("ficou tudo certo").
+- Janela sem foco não pausa mais: `focus_guard` descarta `WM_ACTIVATE(WA_INACTIVE)`/`WM_ACTIVATEAPP(FALSE)`. Antes, o host abria o menu de pausa e o fantoche ficava "duro".
+- `sys_MaxFPS=60` por padrão (`[debug] max_fps`), por causa dos travamentos do PC com as duas cópias no menu.
+
+Limitações da etapa 1c:
+- Mira só com arma longa (espingarda, rifle, fuzil, submetralhadora); pistola mira com a arma baixa.
+- Mira sempre horizontal e para frente: inclinação (cima/baixo) e andar de lado/de costas mirando não são representados.
+
 Limitações da etapa 1:
 - **Sem dano**: o golpe é só visual. Cada instância tem os próprios zumbis; dano depende dos zumbis compartilhados.
 - Arma na mão: ✅ (etapa 1b). A pose `weaponoffset_*` (camada 6) não é replicada; armas de fogo/itens com personagem (`.chr`) em vez de `.cgf` não foram testados.

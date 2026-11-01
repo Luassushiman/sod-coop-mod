@@ -44,16 +44,20 @@ function SodCoop.RemovePuppet()
   if SodCoop.PuppetAlive() then System.RemoveEntity(SodCoop.puppet.id) end
   SodCoop.puppet = nil
 end
-function SodCoop.PlayPuppetAnim(name, speed, loop, blend)
+function SodCoop.PlayPuppetAnim(name, speed, loop, blend, layer)
   if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
   local e = SodCoop.puppet
-  if not loop then
+  if not loop and string.sub(name, 1, 1) ~= "_" then
     -- GetAnimationLength usa GetAnimIDByName: <= 0 = o modelo do fantoche não tem a animação.
     local len = e:GetAnimationLength(0, name)
     if not len or len <= 0 then error("sodcoop: animacao inexistente no fantoche: " .. name) end
   end
-  e:StartAnimation(0, name, 0, blend, speed, loop)
+  e:StartAnimation(0, name, layer, blend, speed, loop)
   e:ForceCharacterUpdate(0, true)
+end
+function SodCoop.StopPuppetLayer(layer)
+  if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
+  SodCoop.puppet:StopAnimation(0, layer)
 end
 function SodCoop.SetPuppetAnimSpeed(rate)
   if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
@@ -195,7 +199,7 @@ bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone) {
     return engine::executeLua(code, "sodcoop_move");
 }
 
-bool playAnimation(const std::string& name, float speed, bool loop, float blendSec) {
+bool playAnimation(const std::string& name, float speed, bool loop, float blendSec, int layer) {
     // O nome pode vir da rede e vai dentro de código Lua: só aceita identificador simples.
     if (name.empty() || name.size() > 64) return false;
     for (char c : name)
@@ -204,8 +208,8 @@ bool playAnimation(const std::string& name, float speed, bool loop, float blendS
             return false;
         }
     char code[256];
-    snprintf(code, sizeof(code), "SodCoop.PlayPuppetAnim(\"%s\", %.3f, %s, %.3f)", name.c_str(), speed,
-             loop ? "true" : "false", blendSec);
+    snprintf(code, sizeof(code), "SodCoop.PlayPuppetAnim(\"%s\", %.3f, %s, %.3f, %d)", name.c_str(), speed,
+             loop ? "true" : "false", blendSec, layer);
     bool ok = engine::executeLua(code, "sodcoop_anim");
     if (!ok) log::warn("puppet: animacao '%s' falhou", name.c_str());
     return ok;
@@ -258,6 +262,12 @@ bool readProbe(engine::Vec3& out) {
     if (!entity || !engine::getWorldTM(entity, tm)) return false;
     out = {tm.m[0][3], tm.m[1][3], tm.m[2][3]};
     return true;
+}
+
+bool stopLayer(int layer) {
+    char code[64];
+    snprintf(code, sizeof(code), "SodCoop.StopPuppetLayer(%d)", layer);
+    return engine::executeLua(code, "sodcoop_stoplayer");
 }
 
 bool setAnimationRate(float rate) {

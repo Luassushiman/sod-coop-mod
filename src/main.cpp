@@ -17,6 +17,7 @@
 #include "core/build_check.h"
 #include "core/clock.h"
 #include "core/config.h"
+#include "core/focus_guard.h"
 #include "core/log.h"
 #include "core/window_keeper.h"
 #include "game/anim_watch.h"
@@ -157,6 +158,16 @@ void onFrame() {
         log::info("cvars: sys_SleepIfInactive=0 -> %s", ok ? "OK" : "FALHOU");
         cvarsApplied = true;
     }
+    static bool fpsApplied = false;
+    if (!fpsApplied && g_cfg.maxFps > 0) {
+        // Duas instâncias sem limite (inclusive no menu) sobrecarregam a GPU; o PC
+        // travou várias vezes com as duas cópias no menu (Kernel-Power 41).
+        char code[96];
+        snprintf(code, sizeof(code), "System.SetCVar(\"sys_MaxFPS\", %d)", g_cfg.maxFps);
+        bool ok = engine::executeLua(code, "sodcoop_maxfps");
+        log::info("cvars: sys_MaxFPS=%d -> %s", g_cfg.maxFps, ok ? "OK" : "FALHOU");
+        fpsApplied = true;
+    }
     engine::EntityId id = local_player::currentId();
     if (id != lastId) {
         lastId = id;
@@ -210,6 +221,27 @@ void onFrame() {
         memcpy(mine.action, action.name, sizeof(mine.action));
         mine.actionSeq = action.seq;
         snprintf(mine.weapon, sizeof(mine.weapon), "%s", localWeapon(settled, now).c_str());
+        memcpy(mine.base, anim_watch::currentBase().name, sizeof(mine.base));
+        memcpy(mine.upper, anim_watch::currentUpper().name, sizeof(mine.upper));
+        mine.upperSeq = anim_watch::currentUpper().seq;
+        memcpy(mine.aimPose, anim_watch::currentAimPose().name, sizeof(mine.aimPose));
+        // IK de mira do jogador (o nome da animação não indica a mira: o jogo
+        // liga o IK por cima de _AIM_* e também de relaxed_idle_*).
+        bool aimOn = false;
+        engine::Vec3 aimTarget{};
+        float aimWeight = 0;
+        if (engine::getAimIK(engine::getEntity(id), aimOn, aimTarget, aimWeight)) {
+            mine.aiming = aimOn;
+            mine.aimOffset[0] = aimTarget.x - s.pos.x;
+            mine.aimOffset[1] = aimTarget.y - s.pos.y;
+            mine.aimOffset[2] = aimTarget.z - s.pos.z;
+            static bool lastAim = false;
+            if (aimOn != lastAim) {
+                lastAim = aimOn;
+                log::info("mira: %s alvo-pos=(%.1f, %.1f, %.1f) peso=%.2f pose=%s", aimOn ? "LIGADA" : "desligada",
+                          mine.aimOffset[0], mine.aimOffset[1], mine.aimOffset[2], aimWeight, mine.aimPose);
+            }
+        }
     }
     net::setLocalState(mine);
 
@@ -262,6 +294,8 @@ DWORD WINAPI initThread(LPVOID) {
     // Hooks antes de o jogo carregar qualquer save.
     frame::addCallback(&onFrame);
     frame::setForceFocus(g_cfg.keepRunningUnfocused);
+    // Sem isto o jogo abre o menu de pausa quando a janela perde o foco.
+    if (g_cfg.keepRunningUnfocused) focus_guard::start();
     if (!local_player::installHook() || !frame::installHook()) return 0;
 
     if (!waitFor(&coreInterfacesReady, 300000, 100)) {

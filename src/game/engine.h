@@ -22,6 +22,19 @@ inline constexpr uintptr_t kSkeletonAnim_SetAnimationDrivenMotion = 0x00B126C0;
 // Getter correspondente: movzx eax, byte [ecx+0x380]; ret.
 inline constexpr uintptr_t kSkeletonAnim_GetAnimationDrivenMotion = 0x00A987E0;
 
+// CSkeletonPose::SetAimIK(bool use, const Vec3& worldTarget, float weight): cria o
+// modificador "AnimationPoseModifier_PoseBlenderAim" (aim poses) e guarda o alvo; RET 0xC.
+// weight != -1 (constante 0x0171E22C) GRAVA o peso atual; com -1 o motor faz o blend sozinho.
+// Vtable do ISkeletonPose +0xDC (runtime). Não é chamado: num AnimObject o modificador
+// nunca roda (peso fica 0); a mira do fantoche usa clipes (remote_player.cpp).
+inline constexpr uintptr_t kSkeletonPose_SetAimIK = 0x00A76D90;
+// Campos lidos/gravados pelo SetAimIK: this+0x2C = PoseBlenderAim*; nele +0x04 bool use,
+// +0x08 Vec3 alvo (mundo), +0x18 float peso atual.
+inline constexpr size_t kSkeletonPose_PoseBlenderAim = 0x2C;
+inline constexpr size_t kPoseBlenderAim_Use = 0x04;
+inline constexpr size_t kPoseBlenderAim_Target = 0x08;
+inline constexpr size_t kPoseBlenderAim_Weight = 0x18;
+
 // Primeiros bytes de kSetLocalActor depois que o SteamStub descriptografa a .text.
 inline constexpr unsigned char kSetLocalActorPrologue[] = {0x55, 0x56, 0x57, 0x8B, 0x7C, 0x24, 0x10};
 
@@ -45,6 +58,7 @@ inline constexpr size_t kEntity_GetStatObj = 0x14C;           // IStatObj* (int 
 inline constexpr size_t kStatObj_GetFilePath = 0xA0;          // const char* () — bind GetAttachmentCGF 0x00B95020
 inline constexpr size_t kEntity_GetCharacter = 0x144;            // ICharacterInstance* (int slot)
 inline constexpr size_t kCharacter_GetISkeletonAnim = 0x10;      // ISkeletonAnim* ()
+inline constexpr size_t kCharacter_GetISkeletonPose = 0x14;      // ISkeletonPose* () — bind GetSlotHelperPos
 inline constexpr size_t kEntity_SetWorldTM = 0x54;       // void (const Matrix34&, int flags)
 inline constexpr size_t kEntity_GetWorldTM = 0x5C;       // const Matrix34& ()
 inline constexpr size_t kEntity_GetWorldAngles = 0x8C;   // Ang3 () — retorno por ponteiro oculto
@@ -78,6 +92,8 @@ void* findEntityByName(const char* name);
 // com true, o deslocamento da raiz contido nos clipes não move o corpo
 // (animação no lugar). false se algum passo da cadeia falhar.
 bool setAnimationDrivenMotion(void* entity, bool enabled);
+// Lê o estado do IK de mira (sem criar o modificador). false se não existe ainda.
+bool getAimIK(void* entity, bool& enabled, Vec3& target, float& weight);
 bool getWorldTM(void* entity, Matrix34& out);
 // Nome atual da entidade ("" se inválida).
 const char* getEntityName(void* entity);

@@ -1,6 +1,7 @@
 #include "game/remote_player.h"
 
 #include <windows.h>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 
@@ -28,6 +29,9 @@ struct Snapshot {
     float speed;
     char action[48];  // ação do remetente neste instante (vazio = só locomoção)
     uint16_t actionSeq;
+    char base[48];    // postura da camada 0 (idle com arma, mira)
+    char upper[48];   // camada 1 (tiro, recarga, segurar arma)
+    uint16_t upperSeq;
 };
 
 Snapshot g_buf[kBufferSize];
@@ -66,6 +70,11 @@ void pushSnapshot(const net::RemoteState& r) {
     s = {senderT, {r.state.pos[0], r.state.pos[1], r.state.pos[2]}, r.state.yaw, r.state.speed, {}, r.state.actionSeq};
     memcpy(s.action, r.state.action, sizeof(s.action));
     s.action[sizeof(s.action) - 1] = 0;
+    memcpy(s.base, r.state.base, sizeof(s.base));
+    s.base[sizeof(s.base) - 1] = 0;
+    memcpy(s.upper, r.state.upper, sizeof(s.upper));
+    s.upper[sizeof(s.upper) - 1] = 0;
+    s.upperSeq = r.state.upperSeq;
 }
 
 // Diagnóstico da última amostragem (para registrar saltos).
@@ -157,6 +166,18 @@ float nominalSpeed(Gait g, const AnimConfig& a) {
     }
 }
 
+// Clipe de mira parada (rifle no ombro), nome do .chrparams (regra "Story_*").
+constexpr const char* kStandAimClip = "Story_ar02_Quarantine_Approach_Soldiers_StandAim";
+constexpr const char* kWalkAimClip = "Test_hero_walk_forward_aim";
+constexpr const char* kRunAimClip = "Test_hero_run_forward_aim";
+
+// Aim poses de arma longa (o clipe acima é com rifle; pistola fica de fora).
+bool isLongGunAimPose(const char* aimPose) {
+    for (const char* p : {"AimPoses_shotgun", "AimPoses_rifle", "AimPoses_assault", "AimPoses_smg"})
+        if (strcmp(aimPose, p) == 0) return true;
+    return false;
+}
+
 const char* gaitName(Gait g) {
     static const char* names[] = {"idle", "walk", "run", "sprint"};
     return g == Gait::None ? "none" : names[static_cast<int>(g)];
@@ -171,6 +192,9 @@ float g_rate = 1.0f;
 DWORD g_lastRateMs = 0;
 uint16_t g_actionSeq = 0;  // última ação vista do remetente
 bool g_inAction = false;   // fantoche tocando uma ação (passos suspensos)
+std::string g_clip;        // animação em loop na camada 0 (passo ou postura base)
+uint16_t g_upperSeq = 0;   // última animação da camada 1 vista do remetente
+bool g_upperOn = false;    // camada 1 tocando no fantoche
 std::string g_weapon;      // arma presa no fantoche
 DWORD g_weaponRetryMs = 0;
 
@@ -281,6 +305,9 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         g_inAction = false;
         g_actionSeq = s.actionSeq;  // não repete uma ação que já passou
         g_weapon.clear();
+        g_clip.clear();
+        g_upperOn = false;
+        g_upperSeq = static_cast<uint16_t>(s.upperSeq - 1);  // toca a camada 1 atual
         if (!g_alive) g_retryAfterMs = now + 3000;
         else log::info("remote_player: fantoche do jogador %08X criado", remote.peerId);
         return;
@@ -301,21 +328,57 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         g_inAction = puppet::playAnimation(s.action, 1.0f, false, 0.1f);
     } else if (!s.action[0] && g_inAction) {
         g_inAction = false;
-        g_gait = Gait::None;
+        g_clip.clear();  // volta a tocar o passo/postura
     }
     g_actionSeq = s.actionSeq;
 
     Gait gait = g_inAction ? g_gait : classify(s.speed, g_gait, anim);
     if (gait != g_gait && (g_gait == Gait::None || nowSec - g_gaitSince >= kMinGaitDwell)) {
         log::info("remote_player: passo %s -> %s (%.2f m/s)", gaitName(g_gait), gaitName(gait), s.speed);
-        puppet::playAnimation(clipFor(gait, anim), 1.0f);  // falha já vai para o log
-        g_gait = gait;  // não repete a cada frame se falhar
+        g_gait = gait;
         g_gaitSince = nowSec;
-        g_rate = 1.0f;
+    }
+    // Postura base do remetente: mira (_AIM_*) vale parado ou andando; idle com
+    // arma só substitui o idle. Sem postura, o passo escolhido pela velocidade.
+    const bool aiming = strncmp(s.base, "_AIM", 4) == 0;
+    const bool useBase = aiming || (s.base[0] && g_gait == Gait::Idle);
+    // Mira parada com arma longa: no jogador a arma sobe pelo IK de aim poses do
+    // motor, que não roda num AnimObject (peso fica 0; ver RE_ENDERECOS 4c). Usa um
+    // clipe de corpo inteiro do próprio jogo com o rifle no ombro (cena da quarentena).
+    const bool longGunAim = remote.state.aiming && isLongGunAimPose(remote.state.aimPose);
+    const bool standAim = longGunAim && g_gait == Gait::Idle;
+    // Andando/correndo mirando: clipes "para frente com mira" do jogo (os mesmos
+    // que o blend space _AIM_* usa), sem a direção lateral.
+    const bool moveAim = longGunAim && g_gait != Gait::Idle && g_gait != Gait::None;
+    if (!g_inAction) {
+        const std::string clip = standAim  ? std::string(kStandAimClip)
+                                 : moveAim ? std::string(g_gait == Gait::Walk ? kWalkAimClip : kRunAimClip)
+                                 : useBase ? std::string(s.base)
+                                           : clipFor(g_gait, anim);
+        if (clip != g_clip) {
+            if (useBase || standAim || moveAim) log::info("remote_player: postura %s", clip.c_str());
+            if (g_rate != 1.0f && puppet::setAnimationRate(1.0f)) g_rate = 1.0f;
+            puppet::playAnimation(clip, 1.0f);  // falha já vai para o log
+            g_clip = clip;  // não repete a cada frame se falhar
+        }
     }
 
+    // Parte de cima do remetente (tiro, recarga, segurar arma) vai na camada 2 do
+    // fantoche: idles em loop, o resto uma vez.
+    if (s.upperSeq != g_upperSeq && s.upper[0]) {
+        std::string lower = s.upper;
+        for (char& c : lower) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+        const bool loop = lower.find("idle") != std::string::npos;
+        log::info("remote_player: parte de cima %s (seq %u%s)", s.upper, s.upperSeq, loop ? ", loop" : "");
+        g_upperOn = puppet::playAnimation(s.upper, 1.0f, loop, 0.15f, 2);
+    } else if (!s.upper[0] && g_upperOn) {
+        puppet::stopLayer(2);
+        g_upperOn = false;
+    }
+    g_upperSeq = s.upperSeq;
+
     // Ritmo dos passos proporcional à velocidade real (reduz pé deslizando).
-    const float nominal = nominalSpeed(g_gait, anim);
+    const float nominal = (useBase || standAim || moveAim) ? 0.0f : nominalSpeed(g_gait, anim);
     float rate = nominal > 0.0f ? s.speed / nominal : 1.0f;
     rate = rate < 0.5f ? 0.5f : rate > 2.0f ? 2.0f : rate;
     if (!g_inAction && std::fabs(rate - g_rate) > 0.05f && now - g_lastRateMs >= 100) {

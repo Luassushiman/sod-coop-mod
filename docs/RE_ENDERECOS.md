@@ -144,6 +144,19 @@ Registro dos bindings em `FUN_00B8DA10`. Os handlers abaixo chamam os métodos d
 | Arma do jogador | entidade própria do item (`inventory:GetCurrentItem()`, ex. `Prybar025`), modelo de 3ª pessoa no **slot 1** (`objects/weapons/club/iron/club_prybar.cgf`); **não** é um `.cgf` preso no esqueleto (`GetAttachmentCGF` vazio em todos os pontos testados); punhos (`Fists`) = 0 slots | VALIDADO-RUNTIME | log `arma:` |
 | `Entity:CreateBoneAttachment(0, "weapon_bone", nome)` + `SetAttachmentCGF(0, nome, arquivo)` | prende o modelo na mão do fantoche na posição certa | VALIDADO-RUNTIME | confirmado pelo usuário |
 
+### Mira, tiro e recarga (2026-11-01)
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| Camadas na arma de fogo | camada 0: postura (`relaxed_idle_shotgun`, blend space `_AIM_SHOTGUN`); camada 1: segurar (`Test_ub_hero_rifle_idle`), tiro (`Gun_shoot_pump_shotgun`), recarga (`Gun_reload_shotgun_start/_load/_pump_end`) | VALIDADO-RUNTIME | log `anim:` |
+| Arma levantada na mira | **IK de aim poses** do motor, não o clipe: `_AIM_SHOTGUN = relaxed_aim.lmg (AimPoses_shotgun)`; `AimPoses_shotgun` = `relaxed_idleAimPoses_rifle.caf` (`unshared_male.chrparams`) | FATO | `basic_player.chrparams` |
+| `CAnimation+0x04` nAnimDirID0 | id (no conjunto do modelo) da aim pose ligada à animação; -4 = nenhuma | VALIDADO-RUNTIME | `0x00AB47B0` (coleta as aim poses da camada 0); `_AIM_SHOTGUN dir0=6` = `AimPoses_shotgun` |
+| `CSkeletonPose::SetAimIK(bool, const Vec3& alvo, float peso)` | `0x00A76D90`, vtbl do `ISkeletonPose` `+0xDC` (runtime); cria `AnimationPoseModifier_PoseBlenderAim` em `this+0x2C` (`+0x04` use, `+0x08` alvo, `+0x18` peso). Peso ≠ -1 **grava** o peso (constante -1 em `0x0171E22C`) | VALIDADO-RUNTIME | descompilação; no jogador local, `+0x04`/`+0x18` refletem a mira (peso 0→1 em ~0,5 s) |
+| `ICharacterInstance::GetISkeletonPose()` | vtbl `+0x14` | VALIDADO-RUNTIME | bind `GetSlotHelperPos` `0x00B989D0` |
+| IK de mira num `AnimObject` | **não funciona**: com `use=1`, alvo válido e `_AIM_SHOTGUN dir0=6` tocando, o peso fica 0 (o modificador não é processado para essa entidade). Tocar a aim pose como animação comum (tempo 0,5, velocidade 0) também não levanta a arma | VALIDADO-RUNTIME | logs `diag mira fantoche`; prints |
+| Saída adotada | clipes de corpo inteiro com a arma no ombro: parado `Story_ar02_Quarantine_Approach_Soldiers_StandAim` (regra `Story_*`; cena da quarentena), andando/correndo `Test_hero_walk_forward_aim` / `Test_hero_run_forward_aim` | VALIDADO-RUNTIME | confirmado pelo usuário |
+| Pausa ao perder o foco | além do `haveFocus` do frame, o jogo pausa (abre "Menu do jogo") pelas mensagens `WM_ACTIVATE`/`WM_ACTIVATEAPP`; a janela é ANSI, wndproc `0x01510D80` | VALIDADO-RUNTIME | `src/core/focus_guard.cpp` descarta as mensagens de desativação |
+
 Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal_chop_fromright/fromleft` e `Strike_bat_ground_no_step*` (camada 0), pose de arma `weaponoffset_Bat` (camada 6), `additive_look_around*` (camada 4), `lipsync_*` (camada 5), `Item_ub_pistol_stow` (camada 1), pulos/quedas `Environmental_*` (camada 0).
 
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"

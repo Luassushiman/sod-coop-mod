@@ -11,6 +11,9 @@
 
 static_assert(sizeof(sodcoop::net::PlayerState::action) == sodcoop::net::kActionNameSize);
 static_assert(sizeof(sodcoop::net::PlayerState::weapon) == sodcoop::net::kWeaponPathSize);
+static_assert(sizeof(sodcoop::net::PlayerState::base) == sodcoop::net::kActionNameSize);
+static_assert(sizeof(sodcoop::net::PlayerState::upper) == sodcoop::net::kActionNameSize);
+static_assert(sizeof(sodcoop::net::PlayerState::aimPose) == sodcoop::net::kActionNameSize);
 
 namespace sodcoop::net {
 namespace {
@@ -66,6 +69,15 @@ void sendState() {
     p.actionSeq = g_local.actionSeq;
     memcpy(p.weapon, g_local.weapon, sizeof(p.weapon));
     p.weapon[sizeof(p.weapon) - 1] = 0;
+    memcpy(p.base, g_local.base, sizeof(p.base));
+    p.base[sizeof(p.base) - 1] = 0;
+    memcpy(p.upper, g_local.upper, sizeof(p.upper));
+    p.upper[sizeof(p.upper) - 1] = 0;
+    p.upperSeq = g_local.upperSeq;
+    p.aiming = g_local.aiming ? 1 : 0;
+    memcpy(p.aimOffset, g_local.aimOffset, sizeof(p.aimOffset));
+    memcpy(p.aimPose, g_local.aimPose, sizeof(p.aimPose));
+    p.aimPose[sizeof(p.aimPose) - 1] = 0;
     ReleaseSRWLockShared(&g_lock);
     send(&p, sizeof(p));
 }
@@ -163,6 +175,15 @@ void handlePacket(const char* data, int size, const Address& from) {
         g_remote.state.actionSeq = p.actionSeq;
         memcpy(g_remote.state.weapon, p.weapon, sizeof(g_remote.state.weapon));
         g_remote.state.weapon[sizeof(g_remote.state.weapon) - 1] = 0;
+        memcpy(g_remote.state.base, p.base, sizeof(g_remote.state.base));
+        g_remote.state.base[sizeof(g_remote.state.base) - 1] = 0;
+        memcpy(g_remote.state.upper, p.upper, sizeof(g_remote.state.upper));
+        g_remote.state.upper[sizeof(g_remote.state.upper) - 1] = 0;
+        g_remote.state.upperSeq = p.upperSeq;
+        g_remote.state.aiming = p.aiming != 0;
+        memcpy(g_remote.state.aimOffset, p.aimOffset, sizeof(p.aimOffset));
+        memcpy(g_remote.state.aimPose, p.aimPose, sizeof(g_remote.state.aimPose));
+        g_remote.state.aimPose[sizeof(g_remote.state.aimPose) - 1] = 0;
         g_remote.receivedAtMs = g_lastRecvMs;
         g_remote.receivedAtSec = clock::seconds();
         g_remote.senderTimeMs = p.timeMs;

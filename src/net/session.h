@@ -32,6 +32,12 @@ struct PlayerState {
     char action[48] = {};  // ver StatePacket.action
     uint16_t actionSeq = 0;
     char weapon[128] = {};  // ver StatePacket.weapon
+    char base[48] = {};     // ver StatePacket.base
+    char upper[48] = {};    // ver StatePacket.upper
+    uint16_t upperSeq = 0;
+    bool aiming = false;
+    float aimOffset[3] = {};  // alvo da mira relativo à posição
+    char aimPose[48] = {};    // ver StatePacket.aimPose
 };
 
 struct RemoteState {

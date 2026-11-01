@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 5;  // v2: speed; v3: timeMs de alta precisão; v4: action; v5: weapon
+inline constexpr uint16_t kProtocolVersion = 8;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -54,6 +54,12 @@ struct StatePacket {
     char action[kActionNameSize];  // animação de ação tocando (ataque, pulo...); vazio = só locomoção
     uint16_t actionSeq;  // muda a cada nova ação (inclusive a mesma repetida)
     char weapon[kWeaponPathSize];  // modelo (.cgf) da arma na mão; vazio = mão vazia
+    char base[kActionNameSize];    // postura da camada 0 (idle com arma, mira _AIM_*); vazio = padrão
+    char upper[kActionNameSize];   // animação da camada 1 (tiro, recarga, segurar arma); vazio = nenhuma
+    uint16_t upperSeq;             // muda a cada animação nova na camada 1
+    uint8_t aiming;                // IK de mira ligado (arma levantada)
+    float aimOffset[3];            // alvo da mira - posição do jogador (m), dá direção e inclinação
+    char aimPose[kActionNameSize]; // animação de aim poses da arma (ex.: AimPoses_shotgun)
 };
 #pragma pack(pop)
 

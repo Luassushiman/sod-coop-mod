@@ -25,6 +25,7 @@ constexpr size_t kAnimStride = 0x78;      // sizeof(CAnimation)
 constexpr size_t kCharInstance = 0x3B4;   // CCharInstance* (this[0xED])
 // CAnimation (nomes dos campos vindos de CAnimation::Serialize, 0x00A9C430)
 constexpr size_t kAnim_Parametric = 0x00;  // != 0 em LMG/blend space
+constexpr size_t kAnim_DirId0 = 0x04;      // int16 nAnimDirID0 (aim pose ligada à animação)
 constexpr size_t kAnim_Id = 0x08;          // int16 nAnimID
 constexpr size_t kAnim_Time = 0x10;        // float fAnimTime (0..1)
 constexpr size_t kAnim_Weight = 0x18;      // float fTransitionWeight
@@ -50,8 +51,7 @@ int dynArrayCount(const void* data) {
     return static_cast<int>(raw & 0x7fffffff);
 }
 
-void* skeletonOf(EntityId id) {
-    void* entity = getEntity(id);
+void* skeletonOfEntity(void* entity) {
     if (!looksLikeObject(entity)) return nullptr;
     using GetCharacter_t = void*(__thiscall*)(void*, int);
     void* character = (*reinterpret_cast<GetCharacter_t**>(entity))[vt::kEntity_GetCharacter / 4](entity, 0);
@@ -60,6 +60,8 @@ void* skeletonOf(EntityId id) {
     void* skel = (*reinterpret_cast<GetSkel_t**>(character))[vt::kCharacter_GetISkeletonAnim / 4](character);
     return looksLikeObject(skel) ? skel : nullptr;
 }
+
+void* skeletonOf(EntityId id) { return skeletonOfEntity(getEntity(id)); }
 
 bool printable(const char* s, size_t maxLen) {
     if (!isReadable(s, 2)) return false;
@@ -118,8 +120,8 @@ std::string animName(void* skel, int16_t animId) {
     return s;
 }
 
-Action g_action;
-float g_actionTime = 0;
+Action g_action, g_base, g_upper, g_aimPose;
+float g_actionTime = 0, g_upperTime = 0;
 
 bool startsWith(const std::string& s, const char* prefix) { return s.compare(0, strlen(prefix), prefix) == 0; }
 
@@ -135,27 +137,55 @@ bool isAction(const std::string& name, bool parametric) {
     return true;
 }
 
-void setAction(const std::string& name, float t) {
-    const bool same = name == g_action.name;
-    // Mesma ação com o tempo voltando = começou de novo (ex.: dois golpes iguais seguidos).
-    if (!name.empty() && (!same || t + 0.2f < g_actionTime)) {
-        ++g_action.seq;
-        log::info("acao: %s (seq %u)", name.c_str(), g_action.seq);
+std::string toLower(std::string s) {
+    for (char& c : s) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+// Postura da camada 0 que o fantoche usa no lugar do idle/andar padrão.
+bool isBase(const std::string& name, bool parametric) {
+    if (name.empty() || name[0] == '#') return false;
+    const std::string lower = toLower(name);
+    if (parametric) return startsWith(lower, "_aim");
+    if (lower == "relaxed_idle_nw" || lower == "test_hero_idle" || startsWith(lower, "scenes_")) return false;
+    return lower.find("idle") != std::string::npos;
+}
+
+void setTrack(Action& track, float& lastTime, const std::string& name, float t, const char* label) {
+    const bool same = name == track.name;
+    // Mesma animação com o tempo voltando = começou de novo (ex.: dois golpes iguais seguidos).
+    // Idles em loop voltam ao início a cada ciclo: nelas só conta a troca de nome.
+    const bool looping = toLower(name).find("idle") != std::string::npos;
+    if (!name.empty() && (!same || (!looping && t + 0.2f < lastTime))) {
+        ++track.seq;
+        log::info("%s: %s (seq %u)", label, name.c_str(), track.seq);
     }
-    if (!same) snprintf(g_action.name, sizeof(g_action.name), "%s", name.c_str());
-    g_actionTime = t;
+    if (!same) snprintf(track.name, sizeof(track.name), "%s", name.c_str());
+    lastTime = t;
+}
+
+void setBase(const std::string& name) {
+    if (name == g_base.name) return;
+    log::info("base: %s", name.empty() ? "(padrao)" : name.c_str());
+    snprintf(g_base.name, sizeof(g_base.name), "%s", name.c_str());
 }
 
 }  // namespace
 
 const Action& currentAction() { return g_action; }
+const Action& currentBase() { return g_base; }
+const Action& currentUpper() { return g_upper; }
+const Action& currentAimPose() { return g_aimPose; }
 
 void update(EntityId id, bool logChanges) {
     static std::string lastSig;
     static DWORD lastFail = 0;
     if (!id) {
         lastSig.clear();
-        setAction("", 0);
+        setTrack(g_action, g_actionTime, "", 0, "acao");
+        setTrack(g_upper, g_upperTime, "", 0, "cima");
+        setBase("");
+        g_aimPose.name[0] = 0;
         return;
     }
     void* skel = skeletonOf(id);
@@ -167,9 +197,10 @@ void update(EntityId id, bool logChanges) {
         return;
     }
     // Assinatura = camadas e IDs ativos (sem tempo/peso, que mudam todo frame).
-    std::string sig, detail, newestL0;
+    std::string sig, detail, newestL0, newestL1;
+    int16_t aimPoseId = -1;  // aim pose ligada a uma animação ativa da camada 0
     bool newestL0Parametric = false;
-    float newestL0Time = 0;
+    float newestL0Time = 0, newestL1Time = 0;
     for (int layer = 0; layer < kNumLayers; ++layer) {
         const char* fifo = nullptr;
         if (!readAt(skel, kLayers + layer * kLayerStride, fifo) || !fifo) continue;
@@ -188,10 +219,15 @@ void update(EntityId id, bool logChanges) {
             snprintf(buf, sizeof(buf), "%d:%d ", layer, animId);
             sig += buf;
             const std::string name = animName(skel, animId);
+            int16_t dir0 = -1;
+            if (layer == 0 && readAt(a, kAnim_DirId0, dir0) && dir0 >= 0) aimPoseId = dir0;
             if (layer == 0) {  // a última entrada da fila é a mais nova
                 newestL0 = name;
                 newestL0Parametric = parametric != 0;
                 newestL0Time = t;
+            } else if (layer == 1 && !parametric) {
+                newestL1 = name;
+                newestL1Time = t;
             }
             char line[200];
             snprintf(line, sizeof(line), " [L%d #%d %s%s t=%.2f w=%.2f v=%.2f]", layer, animId, name.c_str(),
@@ -199,7 +235,12 @@ void update(EntityId id, bool logChanges) {
             detail += line;
         }
     }
-    setAction(isAction(newestL0, newestL0Parametric) ? newestL0 : std::string(), newestL0Time);
+    const bool l0Action = isAction(newestL0, newestL0Parametric);
+    setTrack(g_action, g_actionTime, l0Action ? newestL0 : std::string(), newestL0Time, "acao");
+    setBase(isBase(newestL0, newestL0Parametric) ? newestL0 : std::string());
+    snprintf(g_aimPose.name, sizeof(g_aimPose.name), "%s",
+             aimPoseId >= 0 ? animName(skel, aimPoseId).c_str() : "");
+    setTrack(g_upper, g_upperTime, newestL1[0] == '#' ? std::string() : newestL1, newestL1Time, "cima");
     if (!logChanges || sig == lastSig) return;
     lastSig = sig;
     log::info("anim:%s", detail.empty() ? " (nenhuma)" : detail.c_str());

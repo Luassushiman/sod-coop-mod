@@ -26,7 +26,10 @@ bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone = "");
 
 // Toca uma animação no fantoche (nome do .chrparams). Sem loop, confere antes
 // se o modelo tem a animação. O nome só pode ter letras, dígitos e '_'.
-bool playAnimation(const std::string& name, float speed, bool loop = true, float blendSec = 0.25f);
+// layer: camada do esqueleto (0 = corpo inteiro; 2 = parte de cima do remetente).
+bool playAnimation(const std::string& name, float speed, bool loop = true, float blendSec = 0.25f, int layer = 0);
+// Para a animação da camada (blend de saída padrão do motor).
+bool stopLayer(int layer);
 
 // Avalia uma expressão Lua e devolve o resultado como texto (canal pelo nome
 // da entidade "sodcoop_text"). Até ~250 caracteres.
@@ -35,6 +38,7 @@ bool readLuaText(const char* expr, std::string& out);
 // Prende o modelo (.cgf) no osso weapon_bone do fantoche; "" remove.
 // Só aceita caminhos com letras, dígitos e _ / . -
 bool setWeapon(const std::string& path);
+
 
 // Posição atual da entidade do fantoche lida do motor (diagnóstico: detecta
 // se algo além do mod moveu a entidade). false se não encontrada.

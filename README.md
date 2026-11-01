@@ -30,11 +30,11 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 - [x] O outro jogador aparece no seu mundo como personagem animado (parado, andando, correndo, sprint)
 - [x] Golpes, pulos e quedas do outro jogador aparecem no personagem dele (ainda sem dano)
 - [x] A arma que o outro jogador está usando aparece na mão dele
+- [x] Mira, tiro e recarga do outro jogador aparecem no personagem dele
 
 ## 🛠️ Próximos passos
 
 - [ ] Dano dos golpes
-- [ ] Mira, tiro e recarga
 - [ ] Zumbis compartilhados (host como autoridade)
 - [ ] Inventário e itens
 - [ ] Veículos

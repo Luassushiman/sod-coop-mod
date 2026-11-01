@@ -1,5 +1,7 @@
 #include "game/engine.h"
 
+#include <cmath>
+
 #include <windows.h>
 #include <cstring>
 
@@ -127,6 +129,29 @@ bool setAnimationDrivenMotion(void* entity, bool enabled) {
     log::info("engine: AnimationDrivenMotion %d -> %d (lido de volta: %d) via vtable %p set+0x%X get+0x%X "
               "(skeletonAnim %p)",
               before, enabled, readFlag(), vtable, setIdx * 4, getIdx * 4, skel);
+    return true;
+}
+
+namespace {
+void* skeletonPoseOf(void* entity) {
+    if (!looksLikeObject(entity)) return nullptr;
+    using GetCharacter_t = void*(__thiscall*)(void*, int);
+    void* character = vfunc<GetCharacter_t>(entity, vt::kEntity_GetCharacter)(entity, 0);
+    if (!looksLikeObject(character)) return nullptr;
+    using GetPose_t = void*(__thiscall*)(void*);
+    void* pose = vfunc<GetPose_t>(character, vt::kCharacter_GetISkeletonPose)(character);
+    return looksLikeObject(pose) ? pose : nullptr;
+}
+}  // namespace
+
+bool getAimIK(void* entity, bool& enabled, Vec3& target, float& weight) {
+    char* pose = static_cast<char*>(skeletonPoseOf(entity));
+    if (!pose || !isReadable(pose + kSkeletonPose_PoseBlenderAim, 4)) return false;
+    char* blender = *reinterpret_cast<char**>(pose + kSkeletonPose_PoseBlenderAim);
+    if (!blender || !isReadable(blender, kPoseBlenderAim_Weight + 4)) return false;
+    enabled = blender[kPoseBlenderAim_Use] != 0;
+    target = *reinterpret_cast<Vec3*>(blender + kPoseBlenderAim_Target);
+    weight = *reinterpret_cast<float*>(blender + kPoseBlenderAim_Weight);
     return true;
 }
 
