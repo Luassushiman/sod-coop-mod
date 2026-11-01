@@ -1,0 +1,4 @@
+nAnimsInFIFO
+AnimName
+AnimNames
+fAnimTime

@@ -1,6 +1,6 @@
-# Protocolo de rede (v3)
+# Protocolo de rede (v4)
 
-Histórico: v1 = posição/yaw; v2 = `State.speed` (escolha de animação); v3 = `State.timeMs` vira relógio de alta precisão (`QueryPerformanceCounter`, ms), base da interpolação. Versões diferentes são recusadas (`Reject(2)`).
+Histórico: v1 = posição/yaw; v2 = `State.speed` (escolha de animação); v3 = `State.timeMs` vira relógio de alta precisão (`QueryPerformanceCounter`, ms), base da interpolação; v4 = `State.action`/`actionSeq` (ataques, pulos e outras ações). Versões diferentes são recusadas (`Reject(2)`).
 
 Código: `src/net/protocol.h` (formato), `src/net/session.cpp` (lógica) e `src/net/udp_socket.cpp` (transporte).
 
@@ -17,7 +17,7 @@ Todo pacote começa com `Header` (16 bytes, little-endian, `#pragma pack(1)`):
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `magic` | u32 | `0x43444F53` ("SODC"); pacotes com outro valor são ignorados |
-| `version` | u16 | `kProtocolVersion` = 1; se for diferente, o host responde `Reject(2)` |
+| `version` | u16 | `kProtocolVersion` = 4; se for diferente, o host responde `Reject(2)` |
 | `type` | u8 | 1 Hello, 2 Welcome, 3 Reject, 4 State, 5 Bye |
 | `reserved` | u8 | 0 |
 | `senderId` | u32 | token aleatório da instância (identificação do jogador) |
@@ -28,7 +28,7 @@ Todo pacote começa com `Header` (16 bytes, little-endian, `#pragma pack(1)`):
 | Hello | `char name[32]` | cliente → host, a cada 500 ms até receber Welcome |
 | Welcome | `u32 clientId` | host → cliente |
 | Reject | `u8 reason` (1 = sessão cheia, 2 = versão) | host → cliente |
-| State | `u32 timeMs, u8 hasPlayer, f32 pos[3], f32 yaw, f32 speed` | ambos, a `send_rate_hz` (também serve de keep-alive) |
+| State | `u32 timeMs, u8 hasPlayer, f32 pos[3], f32 yaw, f32 speed, char action[48], u16 actionSeq` | ambos, a `send_rate_hz` (também serve de keep-alive) |
 | Bye | — | ambos, ao encerrar |
 
 Regras (seguindo o Co-op Anything): nenhum ponteiro ou endereço no protocolo, só valores e IDs; movimento vai em pacotes não confiáveis; desconexão é detectada por timeout de keep-alive (`timeout_ms`), sem confiar só no `Bye`.
@@ -52,6 +52,10 @@ Regras (seguindo o Co-op Anything): nenhum ponteiro ou endereço no protocolo, s
 - **Animação:**
   - passo escolhido por `speed`, com histerese e tempo mínimo de 0,4 s por passo;
   - ritmo = `speed` / velocidade nominal do clipe.
+- **Ações (`action`, `actionSeq`):**
+  - `action` = nome da animação de ação do remetente (vazio = só locomoção); `actionSeq` muda a cada ação nova, inclusive a mesma repetida;
+  - como evento discreto, não é interpolado: vale o do snapshot anterior ao instante desenhado;
+  - o receptor só aceita nomes com `[A-Za-z0-9_]` e toca a animação uma vez; com `action` vazio, volta ao passo.
 
 ## Configuração (`sodcoop.ini`, seção `[net]`)
 

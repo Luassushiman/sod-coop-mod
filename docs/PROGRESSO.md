@@ -40,9 +40,25 @@ Bugs encontrados e corrigidos nesta etapa:
 
 Limitações restantes da animação:
 - Pequenos artefatos na troca andar↔correr (dois clipes com deslocamentos de raiz diferentes se misturando): picos de 7–12 "resets" num segundo, perto de 2,4–2,7 m/s.
-- Só locomoção. Sem animação de ataque, mira, agachar, pulo, veículo, carregar mochila, interação ou morte.
+- Ataques e pulos: ver "Combate — etapa 1". Ainda sem mira/tiro, agachar, veículo, carregar mochila, interação ou morte (não testados; a detecção genérica pode já cobrir parte deles).
 - Direção da animação = sempre "para frente"; andar de lado/de costas (strafe) não é representado.
 - Idle mostra a bacia a ~0,40 m da origem da entidade (compensado).
+
+## Combate — etapa 1: ações visíveis no fantoche (2026-11-01)
+
+| Item | Status | Evidência |
+|---|---|---|
+| Leitura das animações em execução no esqueleto do jogador | ✅ | `src/game/anim_watch.cpp`; layout em `RE_ENDERECOS.md` seção 4c; nomes lidos corretamente (`relaxed_idle_nw`, `_RUN_NW`, `BluntLight_diagonal_chop_fromright`...) |
+| Detecção da "ação" (animação mais nova da camada 0 que não é locomoção/idle) | ✅ | log `acao: ... (seq N)` |
+| Ação enviada pela rede (protocolo v4) e tocada no fantoche | ✅ | confirmado pelo usuário ("golpes apareceram"); log do client: 20 ações tocadas, nenhuma falha (golpes de taco, golpe no chão, pulos, queda) |
+
+Como funciona: quem joga envia o nome da ação e um contador; o fantoche toca a animação uma vez (blend 0,1 s, ritmo 1×), suspende a troca de passo e, quando a ação termina, volta à locomoção. O nome recebido só é aceito com letras, dígitos e `_` (vai para o Lua) e é conferido com `GetAnimationLength` (o modelo do fantoche precisa ter a animação).
+
+Limitações da etapa 1:
+- **Sem dano**: o golpe é só visual. Cada instância tem os próprios zumbis; dano depende dos zumbis compartilhados.
+- **Sem arma na mão** do fantoche (golpeia de mão vazia); a pose `weaponoffset_Bat` (camada 6) também não é replicada.
+- Camadas superiores (1–15: parte de cima do corpo, aditivas) não são replicadas; só a camada 0.
+- A ação começa do início no fantoche (não sincroniza o tempo da animação) e respeita o atraso de interpolação (100 ms).
 
 Limitações conhecidas da rede atual:
 - Só 1 cliente, só IP direto/LAN, sem criptografia nem Steam relay.
@@ -51,6 +67,6 @@ Limitações conhecidas da rede atual:
 - Cada instância roda o próprio mundo: zumbis, NPCs, loot e eventos **não** estão sincronizados. Só a posição/rotação dos jogadores é compartilhada.
 
 Limitações conhecidas do fantoche atual:
-- Sem animação (desliza na pose padrão). A sincronização de animação é um marco posterior.
+- Golpeia de mão vazia (sem modelo de arma anexado).
 - O modelo é só o corpo (`.cdf` de body); pode aparecer sem cabeça.
 - O movimento usa uma chamada Lua por frame (`ExecuteBuffer` + compilação de um trecho pequeno). Basta para o protótipo; trocar por `IEntity::SetWorldTM` nativo (vtbl `+0x54`) quando o EntityId do fantoche for obtido no lado C++.

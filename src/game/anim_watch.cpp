@@ -1,0 +1,208 @@
+#include "game/anim_watch.h"
+
+#include <windows.h>
+
+#include <cstdio>
+#include <cctype>
+#include <cstring>
+#include <string>
+
+#include "core/log.h"
+
+namespace sodcoop::anim_watch {
+
+namespace {
+
+using namespace engine;
+
+// Layout do CSkeletonAnim (build 845221), ver docs/RE_ENDERECOS.md seção 4c.
+// GetNumAnimsInFIFO (vtbl +0x3C, 0x00B136F0) e GetAnimFromFIFO (vtbl +0x44, 0x00B13650)
+// leem estes campos; lemos direto para não chamar código do motor fora de hora.
+constexpr size_t kLayers = 0xB8;          // DynArray<CAnimation> fifo[16]
+constexpr size_t kLayerStride = 0x24;
+constexpr int kNumLayers = 16;
+constexpr size_t kAnimStride = 0x78;      // sizeof(CAnimation)
+constexpr size_t kCharInstance = 0x3B4;   // CCharInstance* (this[0xED])
+// CAnimation (nomes dos campos vindos de CAnimation::Serialize, 0x00A9C430)
+constexpr size_t kAnim_Parametric = 0x00;  // != 0 em LMG/blend space
+constexpr size_t kAnim_Id = 0x08;          // int16 nAnimID
+constexpr size_t kAnim_Time = 0x10;        // float fAnimTime (0..1)
+constexpr size_t kAnim_Weight = 0x18;      // float fTransitionWeight
+constexpr size_t kAnim_Speed = 0x1C;       // float fCurrentPlaybackSpeed
+// Modelo: CCharInstance+0x88 -> CCharacterModel; +0x11C -> ModelAnimationHeader[] (0x14 bytes,
+// int16 id global em +8). Visto em 0x00B13750 e na serialização.
+constexpr size_t kInst_Model = 0x88;
+constexpr size_t kModel_AnimHeaders = 0x11C;
+constexpr size_t kHeaderStride = 0x14;
+
+template <class T>
+bool readAt(const void* base, size_t off, T& out) {
+    const auto* p = static_cast<const char*>(base) + off;
+    if (!isReadable(p, sizeof(T))) return false;
+    std::memcpy(&out, p, sizeof(T));
+    return true;
+}
+
+// Quantidade de elementos de um DynArray do CryEngine (guardada antes dos dados).
+int dynArrayCount(const void* data) {
+    uint32_t raw = 0;
+    if (!data || !readAt(data, static_cast<size_t>(-4), raw)) return -1;
+    return static_cast<int>(raw & 0x7fffffff);
+}
+
+void* skeletonOf(EntityId id) {
+    void* entity = getEntity(id);
+    if (!looksLikeObject(entity)) return nullptr;
+    using GetCharacter_t = void*(__thiscall*)(void*, int);
+    void* character = (*reinterpret_cast<GetCharacter_t**>(entity))[vt::kEntity_GetCharacter / 4](entity, 0);
+    if (!looksLikeObject(character)) return nullptr;
+    using GetSkel_t = void*(__thiscall*)(void*);
+    void* skel = (*reinterpret_cast<GetSkel_t**>(character))[vt::kCharacter_GetISkeletonAnim / 4](character);
+    return looksLikeObject(skel) ? skel : nullptr;
+}
+
+bool printable(const char* s, size_t maxLen) {
+    if (!isReadable(s, 2)) return false;
+    size_t n = 0;
+    for (; n < maxLen; ++n) {
+        if (!isReadable(s + n, 1)) return false;
+        unsigned char c = s[n];
+        if (!c) break;
+        if (c < 0x20 || c > 0x7e) return false;
+    }
+    return n >= 2 && n < maxLen;
+}
+
+// Descobre em runtime em qual dword do ModelAnimationHeader está o nome (ponteiro de
+// CryString). Feito uma vez, com várias entradas, e registrado no log.
+int g_nameOffset = -2;  // -2 = ainda não testado, -1 = não encontrado
+
+void detectNameOffset(const char* headers, int count) {
+    int votes[kHeaderStride / 4] = {};
+    for (int i = 0; i < count && i < 32; ++i) {
+        for (size_t off = 0; off < kHeaderStride; off += 4) {
+            const char* s = nullptr;
+            if (readAt(headers + i * kHeaderStride, off, s) && printable(s, 256)) ++votes[off / 4];
+        }
+    }
+    int best = -1;
+    for (int k = 0; k < (int)(kHeaderStride / 4); ++k)
+        if (votes[k] > 0 && (best < 0 || votes[k] > votes[best])) best = k;
+    g_nameOffset = best < 0 ? -1 : best * 4;
+    char dump[160];
+    int n = 0;
+    for (size_t off = 0; off < kHeaderStride && n < (int)sizeof(dump) - 12; off += 4) {
+        uint32_t v = 0;
+        readAt(headers, off, v);
+        n += snprintf(dump + n, sizeof(dump) - n, " %08X", v);
+    }
+    log::info("anim_watch: %d cabecalhos; nome no offset %d (votos %d/%d/%d/%d/%d); entrada 0:%s", count,
+              g_nameOffset, votes[0], votes[1], votes[2], votes[3], votes[4], dump);
+}
+
+std::string animName(void* skel, int16_t animId) {
+    char fallback[24];
+    snprintf(fallback, sizeof(fallback), "#%d", animId);
+    void* inst = nullptr;
+    void* model = nullptr;
+    const char* headers = nullptr;
+    if (!readAt(skel, kCharInstance, inst) || !inst || !readAt(inst, kInst_Model, model) || !model ||
+        !readAt(model, kModel_AnimHeaders, headers) || !headers)
+        return fallback;
+    const int count = dynArrayCount(headers);
+    if (count <= 0 || count > 20000 || animId < 0 || animId >= count) return fallback;
+    if (g_nameOffset == -2) detectNameOffset(headers, count);
+    if (g_nameOffset < 0) return fallback;
+    const char* s = nullptr;
+    if (!readAt(headers + animId * kHeaderStride, g_nameOffset, s) || !printable(s, 256)) return fallback;
+    return s;
+}
+
+Action g_action;
+float g_actionTime = 0;
+
+bool startsWith(const std::string& s, const char* prefix) { return s.compare(0, strlen(prefix), prefix) == 0; }
+
+// Locomoção, idles, viradas e camadas de cena ficam de fora: o fantoche já
+// anda pelo próprio sistema de passos (remote_player).
+bool isAction(const std::string& name, bool parametric) {
+    if (parametric || name.empty() || name[0] == '#') return false;
+    std::string lower = name;
+    for (char& c : lower) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    if (lower.find("idle") != std::string::npos) return false;
+    for (const char* p : {"test_hero_", "scenes_", "lipsync", "additive", "relaxed_", "weaponoffset"})
+        if (startsWith(lower, p)) return false;
+    return true;
+}
+
+void setAction(const std::string& name, float t) {
+    const bool same = name == g_action.name;
+    // Mesma ação com o tempo voltando = começou de novo (ex.: dois golpes iguais seguidos).
+    if (!name.empty() && (!same || t + 0.2f < g_actionTime)) {
+        ++g_action.seq;
+        log::info("acao: %s (seq %u)", name.c_str(), g_action.seq);
+    }
+    if (!same) snprintf(g_action.name, sizeof(g_action.name), "%s", name.c_str());
+    g_actionTime = t;
+}
+
+}  // namespace
+
+const Action& currentAction() { return g_action; }
+
+void update(EntityId id, bool logChanges) {
+    static std::string lastSig;
+    static DWORD lastFail = 0;
+    if (!id) {
+        lastSig.clear();
+        setAction("", 0);
+        return;
+    }
+    void* skel = skeletonOf(id);
+    if (!skel) {
+        if (GetTickCount() - lastFail > 10000) {
+            lastFail = GetTickCount();
+            log::warn("anim_watch: esqueleto do jogador indisponivel");
+        }
+        return;
+    }
+    // Assinatura = camadas e IDs ativos (sem tempo/peso, que mudam todo frame).
+    std::string sig, detail, newestL0;
+    bool newestL0Parametric = false;
+    float newestL0Time = 0;
+    for (int layer = 0; layer < kNumLayers; ++layer) {
+        const char* fifo = nullptr;
+        if (!readAt(skel, kLayers + layer * kLayerStride, fifo) || !fifo) continue;
+        const int n = dynArrayCount(fifo);
+        if (n <= 0 || n > 16) continue;
+        for (int i = 0; i < n; ++i) {
+            const char* a = fifo + i * kAnimStride;
+            uint32_t parametric = 0;
+            int16_t animId = -1;
+            float t = 0, w = 0, sp = 0;
+            if (!readAt(a, kAnim_Parametric, parametric) || !readAt(a, kAnim_Id, animId)) continue;
+            readAt(a, kAnim_Time, t);
+            readAt(a, kAnim_Weight, w);
+            readAt(a, kAnim_Speed, sp);
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%d:%d ", layer, animId);
+            sig += buf;
+            const std::string name = animName(skel, animId);
+            if (layer == 0) {  // a última entrada da fila é a mais nova
+                newestL0 = name;
+                newestL0Parametric = parametric != 0;
+                newestL0Time = t;
+            }
+            char line[200];
+            snprintf(line, sizeof(line), " [L%d #%d %s%s t=%.2f w=%.2f v=%.2f]", layer, animId, name.c_str(),
+                     parametric ? " (LMG)" : "", t, w, sp);
+            detail += line;
+        }
+    }
+    setAction(isAction(newestL0, newestL0Parametric) ? newestL0 : std::string(), newestL0Time);
+    if (!logChanges || sig == lastSig) return;
+    lastSig = sig;
+    log::info("anim:%s", detail.empty() ? " (nenhuma)" : detail.c_str());
+}
+
+}  // namespace sodcoop::anim_watch

@@ -40,6 +40,7 @@ struct Config {
     std::string instanceName = "default";  // [general] instance=host|client — log e nome do jogador
     int positionLogIntervalMs = 1000;      // [debug] position_log_interval_ms
     bool keepRunningUnfocused = false;     // [debug] keep_running_unfocused: não pausa/desacelera sem foco
+    bool animWatch = true;                 // [debug] anim_watch: registra as animações do jogador local
     // [puppet] modelo do fantoche (jogador remoto) e espelho local de teste
     std::string puppetModel = "characters/male/human/body/tshirt_jeans/variant/v01.cdf";  // model
     bool mirrorLocal = false;              // mirror_local=1: fantoche copia o jogador local (só com role=off)

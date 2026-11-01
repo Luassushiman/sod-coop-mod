@@ -9,6 +9,8 @@
 #include "net/protocol.h"
 #include "net/udp_socket.h"
 
+static_assert(sizeof(sodcoop::net::PlayerState::action) == sodcoop::net::kActionNameSize);
+
 namespace sodcoop::net {
 namespace {
 
@@ -58,6 +60,9 @@ void sendState() {
     memcpy(p.pos, g_local.pos, sizeof(p.pos));
     p.yaw = g_local.yaw;
     p.speed = g_local.speed;
+    memcpy(p.action, g_local.action, sizeof(p.action));
+    p.action[sizeof(p.action) - 1] = 0;
+    p.actionSeq = g_local.actionSeq;
     ReleaseSRWLockShared(&g_lock);
     send(&p, sizeof(p));
 }
@@ -150,6 +155,9 @@ void handlePacket(const char* data, int size, const Address& from) {
         memcpy(g_remote.state.pos, p.pos, sizeof(p.pos));
         g_remote.state.yaw = p.yaw;
         g_remote.state.speed = p.speed;
+        memcpy(g_remote.state.action, p.action, sizeof(g_remote.state.action));
+        g_remote.state.action[sizeof(g_remote.state.action) - 1] = 0;
+        g_remote.state.actionSeq = p.actionSeq;
         g_remote.receivedAtMs = g_lastRecvMs;
         g_remote.receivedAtSec = clock::seconds();
         g_remote.senderTimeMs = p.timeMs;

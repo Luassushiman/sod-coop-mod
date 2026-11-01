@@ -11,6 +11,7 @@
 #include <windows.h>
 
 #include <cmath>
+#include <cstring>
 #include <string>
 
 #include "core/build_check.h"
@@ -18,6 +19,7 @@
 #include "core/config.h"
 #include "core/log.h"
 #include "core/window_keeper.h"
+#include "game/anim_watch.h"
 #include "game/engine.h"
 #include "game/frame.h"
 #include "game/local_player.h"
@@ -154,6 +156,8 @@ void onFrame() {
         speed = 0;
     }
 
+    anim_watch::update(settled ? id : 0, g_cfg.animWatch);
+
     net::PlayerState mine;
     mine.hasPlayer = settled;
     if (inWorld) {
@@ -162,6 +166,9 @@ void onFrame() {
         mine.pos[2] = s.pos.z;
         mine.yaw = s.angles.z;
         mine.speed = speed;
+        const anim_watch::Action& action = anim_watch::currentAction();
+        memcpy(mine.action, action.name, sizeof(mine.action));
+        mine.actionSeq = action.seq;
     }
     net::setLocalState(mine);
 

@@ -24,8 +24,9 @@ bool spawn(const std::string& model, const engine::Vec3& pos, int drivenMotion);
 // esse osso fique horizontalmente sobre pos.
 bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone = "");
 
-// Toca uma animação em loop no fantoche (nome do .chrparams, blend de 0,25 s).
-bool playAnimation(const std::string& name, float speed);
+// Toca uma animação no fantoche (nome do .chrparams). Sem loop, confere antes
+// se o modelo tem a animação. O nome só pode ter letras, dígitos e '_'.
+bool playAnimation(const std::string& name, float speed, bool loop = true, float blendSec = 0.25f);
 
 // Posição atual da entidade do fantoche lida do motor (diagnóstico: detecta
 // se algo além do mod moveu a entidade). false se não encontrada.

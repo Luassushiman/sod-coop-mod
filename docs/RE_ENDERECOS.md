@@ -118,6 +118,23 @@ Registro dos bindings em `FUN_00B8DA10`. Os handlers abaixo chamam os métodos d
 
 **Canal Lua → DLL:** `SodCoop.Report(a, b, c)` grava valores como posição da entidade invisível `sodcoop_probe` (BasicEntity sem modelo e sem física, z≈5000), e a DLL lê com `FindEntityByName` + `GetWorldTM`. Ver `src/game/puppet.cpp`.
 
+## 4c. Animações em execução (CSkeletonAnim / CAnimation) — 2026-11-01
+
+`ISkeletonAnim*` = o ponteiro devolvido por `ICharacterInstance::GetISkeletonAnim()` (mesmo objeto do campo `+0x380` da seção 4b).
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| `GetNumAnimsInFIFO(layer)` | vtbl `+0x3C` = `0x00B136F0`: `count(*(this+0xB8+layer*0x24))` | VALIDADO-RUNTIME | descompilação; usado pelo bind `Entity:IsAnimationRunning` (`0x00B9B480`) |
+| `GetAnimFromFIFO(layer, i)` | vtbl `+0x44` = `0x00B13650`: `*(this+0xB8+layer*0x24) + i*0x78` | VALIDADO-RUNTIME | descompilação |
+| Filas por camada | 16 camadas a partir de `+0xB8`, passo `0x24`; 1º dword = dados do `DynArray`, quantidade em `dados-4 & 0x7FFFFFFF` | VALIDADO-RUNTIME | `CSkeletonAnim::Serialize` `0x00A9C630` ("FIFO", "nAnimsInFIFO"); leitura em jogo |
+| `CAnimation` (0x78 bytes) | `+0x00` sampler paramétrico (≠0 em LMG), `+0x04/+0x06` nAnimDirID0/1, `+0x08` int16 **nAnimID**, `+0x0C` fAnimTimePrev, `+0x10` **fAnimTime**, `+0x14` fTransitionPriority, `+0x18` **fTransitionWeight**, `+0x1C` **fCurrentPlaybackSpeed**, `+0x20` fCurrentDuration, `+0x24` fCurrentDeltaTime, `+0x28` nRepeatCount, `+0x2A` nLoopCount, `+0x2C` nKeyPassed, `+0x2E` bActivated, `+0x30` bRemoveFromQueue | VALIDADO-RUNTIME (campos em negrito) | nomes dos campos em `CAnimation::Serialize` `0x00A9C430` |
+| Nome da animação | `*(this+0x3B4)` (CCharInstance) `+0x88` (modelo) `+0x11C` = `ModelAnimationHeader[]` (0x14 bytes, quantidade no `DynArray`); **nome (char\*) em `+0x00`**, id global int16 em `+0x08` | VALIDADO-RUNTIME | `0x00B13750`; offset do nome detectado em runtime (32/32 entradas) — 2561 animações no modelo do jogador |
+| `Entity:GetCurAnimation` | bind existe mas é um **esboço vazio** neste build | CONFIRMADO-ESTÁTICO | `0x00B95B60` |
+| `Entity:GetAnimationLength(slot, nome)` | `IAnimationSet::GetAnimIDByName` (vtbl `+0x14`) + duração (`+0x64`); `ICharacterInstance::GetIAnimationSet` = vtbl `+0x24` | CONFIRMADO-ESTÁTICO | `0x00B94E30` |
+| Grafo de animação | ataques não passam pelo AnimationGraph: `UL_FullBody` tem `Action = StateMachine/idle` (máquina de estados nativa da UL) | FATO | `ul_fullbody.xml` |
+
+Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal_chop_fromright/fromleft` e `Strike_bat_ground_no_step*` (camada 0), pose de arma `weaponoffset_Bat` (camada 6), `additive_look_around*` (camada 4), `lipsync_*` (camada 5), `Item_ub_pistol_stow` (camada 1), pulos/quedas `Environmental_*` (camada 0).
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).

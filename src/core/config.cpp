@@ -42,6 +42,7 @@ Config loadConfig() {
         GetPrivateProfileIntW(L"debug", L"position_log_interval_ms", 1000, ini.c_str());
     if (c.positionLogIntervalMs < 50) c.positionLogIntervalMs = 50;
     c.keepRunningUnfocused = GetPrivateProfileIntW(L"debug", L"keep_running_unfocused", 0, ini.c_str()) != 0;
+    c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 1, ini.c_str()) != 0;
     c.puppetModel = readString(ini, L"puppet", L"model", c.puppetModel);
     c.mirrorLocal = GetPrivateProfileIntW(L"puppet", L"mirror_local", 0, ini.c_str()) != 0;
     c.mirrorOffsetX = readFloat(ini, L"puppet", L"mirror_offset_x", c.mirrorOffsetX);

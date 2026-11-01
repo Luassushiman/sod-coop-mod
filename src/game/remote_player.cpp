@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <cmath>
+#include <cstring>
 
 #include "core/clock.h"
 #include "core/log.h"
@@ -25,6 +26,8 @@ struct Snapshot {
     engine::Vec3 pos;
     float yaw;
     float speed;
+    char action[48];  // ação do remetente neste instante (vazio = só locomoção)
+    uint16_t actionSeq;
 };
 
 Snapshot g_buf[kBufferSize];
@@ -59,7 +62,10 @@ void pushSnapshot(const net::RemoteState& r) {
         for (int i = 1; i < kBufferSize; ++i) g_buf[i - 1] = g_buf[i];
         --g_count;
     }
-    g_buf[g_count++] = {senderT, {r.state.pos[0], r.state.pos[1], r.state.pos[2]}, r.state.yaw, r.state.speed};
+    Snapshot& s = g_buf[g_count++];
+    s = {senderT, {r.state.pos[0], r.state.pos[1], r.state.pos[2]}, r.state.yaw, r.state.speed, {}, r.state.actionSeq};
+    memcpy(s.action, r.state.action, sizeof(s.action));
+    s.action[sizeof(s.action) - 1] = 0;
 }
 
 // Diagnóstico da última amostragem (para registrar saltos).
@@ -86,6 +92,7 @@ bool sample(double renderT, Snapshot& out) {
             return true;
         }
         const float k = static_cast<float>((renderT - a.t) / (b.t - a.t));
+        out = a;  // ação: vale a do snapshot anterior (eventos discretos não se interpolam)
         out.t = renderT;
         out.pos = {a.pos.x + dx * k, a.pos.y + dy * k, a.pos.z + dz * k};
         out.yaw = wrapAngle(a.yaw + wrapAngle(b.yaw - a.yaw) * k);
@@ -162,6 +169,8 @@ Gait g_gait = Gait::None;
 double g_gaitSince = 0;
 float g_rate = 1.0f;
 DWORD g_lastRateMs = 0;
+uint16_t g_actionSeq = 0;  // última ação vista do remetente
+bool g_inAction = false;   // fantoche tocando uma ação (passos suspensos)
 
 void despawn(const char* reason) {
     if (!g_alive) return;
@@ -267,12 +276,27 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         if (now < g_retryAfterMs) return;
         g_alive = puppet::spawn(model, s.pos, anim.drivenMotion);
         g_gait = Gait::None;  // força tocar a animação no fantoche novo
+        g_inAction = false;
+        g_actionSeq = s.actionSeq;  // não repete uma ação que já passou
         if (!g_alive) g_retryAfterMs = now + 3000;
         else log::info("remote_player: fantoche do jogador %08X criado", remote.peerId);
         return;
     }
 
-    Gait gait = classify(s.speed, g_gait, anim);
+    // Ações (golpes, pulos...): tocam uma vez por cima da locomoção; ao terminar,
+    // o passo atual é tocado de novo.
+    if (s.action[0] && s.actionSeq != g_actionSeq) {
+        log::info("remote_player: acao %s (seq %u)", s.action, s.actionSeq);
+        // O multiplicador de ritmo da camada vale para qualquer animação: volta a 1.
+        if (g_rate != 1.0f && puppet::setAnimationRate(1.0f)) g_rate = 1.0f;
+        g_inAction = puppet::playAnimation(s.action, 1.0f, false, 0.1f);
+    } else if (!s.action[0] && g_inAction) {
+        g_inAction = false;
+        g_gait = Gait::None;
+    }
+    g_actionSeq = s.actionSeq;
+
+    Gait gait = g_inAction ? g_gait : classify(s.speed, g_gait, anim);
     if (gait != g_gait && (g_gait == Gait::None || nowSec - g_gaitSince >= kMinGaitDwell)) {
         log::info("remote_player: passo %s -> %s (%.2f m/s)", gaitName(g_gait), gaitName(gait), s.speed);
         puppet::playAnimation(clipFor(gait, anim), 1.0f);  // falha já vai para o log
@@ -285,7 +309,7 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
     const float nominal = nominalSpeed(g_gait, anim);
     float rate = nominal > 0.0f ? s.speed / nominal : 1.0f;
     rate = rate < 0.5f ? 0.5f : rate > 2.0f ? 2.0f : rate;
-    if (std::fabs(rate - g_rate) > 0.05f && now - g_lastRateMs >= 100) {
+    if (!g_inAction && std::fabs(rate - g_rate) > 0.05f && now - g_lastRateMs >= 100) {
         g_lastRateMs = now;
         if (puppet::setAnimationRate(rate)) g_rate = rate;
     }

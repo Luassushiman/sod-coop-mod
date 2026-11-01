@@ -1,5 +1,6 @@
 #include "game/puppet.h"
 
+#include <cctype>
 #include <cstdio>
 
 #include "core/log.h"
@@ -42,10 +43,15 @@ function SodCoop.RemovePuppet()
   if SodCoop.PuppetAlive() then System.RemoveEntity(SodCoop.puppet.id) end
   SodCoop.puppet = nil
 end
-function SodCoop.PlayPuppetAnim(name, speed)
+function SodCoop.PlayPuppetAnim(name, speed, loop, blend)
   if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
   local e = SodCoop.puppet
-  e:StartAnimation(0, name, 0, 0.25, speed, true)
+  if not loop then
+    -- GetAnimationLength usa GetAnimIDByName: <= 0 = o modelo do fantoche não tem a animação.
+    local len = e:GetAnimationLength(0, name)
+    if not len or len <= 0 then error("sodcoop: animacao inexistente no fantoche: " .. name) end
+  end
+  e:StartAnimation(0, name, 0, blend, speed, loop)
   e:ForceCharacterUpdate(0, true)
 end
 function SodCoop.SetPuppetAnimSpeed(rate)
@@ -136,9 +142,17 @@ bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone) {
     return engine::executeLua(code, "sodcoop_move");
 }
 
-bool playAnimation(const std::string& name, float speed) {
+bool playAnimation(const std::string& name, float speed, bool loop, float blendSec) {
+    // O nome pode vir da rede e vai dentro de código Lua: só aceita identificador simples.
+    if (name.empty() || name.size() > 64) return false;
+    for (char c : name)
+        if (!isalnum(static_cast<unsigned char>(c)) && c != '_') {
+            log::warn("puppet: nome de animacao recusado");
+            return false;
+        }
     char code[256];
-    snprintf(code, sizeof(code), "SodCoop.PlayPuppetAnim(\"%s\", %.3f)", name.c_str(), speed);
+    snprintf(code, sizeof(code), "SodCoop.PlayPuppetAnim(\"%s\", %.3f, %s, %.3f)", name.c_str(), speed,
+             loop ? "true" : "false", blendSec);
     bool ok = engine::executeLua(code, "sodcoop_anim");
     if (!ok) log::warn("puppet: animacao '%s' falhou", name.c_str());
     return ok;

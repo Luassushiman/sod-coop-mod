@@ -7,7 +7,8 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 3;  // v2: StatePacket.speed; v3: timeMs de alta precisão
+inline constexpr uint16_t kProtocolVersion = 4;  // v2: speed; v3: timeMs de alta precisão; v4: action
+inline constexpr int kActionNameSize = 48;
 
 enum class PacketType : uint8_t {
     Hello = 1,    // cliente -> host: pede para entrar
@@ -49,6 +50,8 @@ struct StatePacket {
     float pos[3];
     float yaw;
     float speed;  // velocidade horizontal medida pelo remetente (m/s), escolhe a animação
+    char action[kActionNameSize];  // animação de ação tocando (ataque, pulo...); vazio = só locomoção
+    uint16_t actionSeq;  // muda a cada nova ação (inclusive a mesma repetida)
 };
 #pragma pack(pop)
 

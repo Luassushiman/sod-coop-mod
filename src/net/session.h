@@ -29,6 +29,8 @@ struct PlayerState {
     float pos[3] = {};
     float yaw = 0;
     float speed = 0;  // m/s, horizontal
+    char action[48] = {};  // ver StatePacket.action
+    uint16_t actionSeq = 0;
 };
 
 struct RemoteState {

@@ -1,0 +1,6 @@
+﻿GetCurAnimation
+CScriptBind_Entity::GetCurAnimation
+GetAnimationTime
+IsAnimationRunning
+GetCurrentAnimationState
+GetAnimationLength
