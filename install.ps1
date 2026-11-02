@@ -9,12 +9,12 @@ param(
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
-# Posição das janelas lado a lado: host à esquerda, client à direita (16:9, centralizadas).
+# Posição das janelas lado a lado: host à esquerda, client à direita (16:9, no topo do monitor).
 Add-Type -AssemblyName System.Windows.Forms
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $winW = [int]($screen.Width / 2)
 $winH = [int]($winW * 9 / 16) + 40
-$winY = [int](($screen.Height - $winH) / 2)
+$winY = 0
 foreach ($t in $Targets) {
     $dir = "$root\testenv\$t"
     if (-not (Test-Path "$dir\StateOfDecay.exe")) { throw "copia de teste nao encontrada: $dir" }

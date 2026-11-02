@@ -1,5 +1,5 @@
 # Coloca as janelas das cópias de teste lado a lado (host à esquerda, client à direita),
-# em 16:9, centralizadas na vertical do monitor principal.
+# em 16:9, no topo do monitor principal.
 # Uso: .\tile_windows.ps1
 Add-Type @'
 using System; using System.Runtime.InteropServices;
@@ -15,7 +15,7 @@ $sw = [SodWin]::GetSystemMetrics(0)
 $sh = [SodWin]::GetSystemMetrics(1)
 $half = [int]($sw / 2)
 $h = [int]($half * 9 / 16) + 40   # + barra de título
-$y = [int](($sh - $h) / 2)
+$y = 0
 foreach ($slot in @(@{ name = "host"; x = 0 }, @{ name = "client"; x = $half })) {
     $p = Get-Process StateOfDecay -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*\testenv\$($slot.name)\*" }
     if (-not $p) { Write-Host "[$($slot.name)] nao esta aberta"; continue }
