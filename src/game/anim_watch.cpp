@@ -196,6 +196,33 @@ void setBase(const std::string& name) {
 
 }  // namespace
 
+std::string modelPath(void* entity) {
+    void* skel = skeletonOfEntity(entity);
+    void* inst = nullptr;
+    void* model = nullptr;
+    const char* path = nullptr;
+    if (!skel || !readAt(skel, kCharInstance, inst) || !inst || !readAt(inst, kInst_Model, model) || !model ||
+        !readAt(model, 4, path) || !printable(path, 256))
+        return "";
+    return path;
+}
+
+bool newestLayer0(void* entity, std::string& name, bool& parametric) {
+    void* skel = skeletonOfEntity(entity);
+    if (!skel) return false;
+    const char* fifo = nullptr;
+    if (!readAt(skel, kLayers, fifo) || !fifo) return false;
+    const int n = dynArrayCount(fifo);
+    if (n <= 0 || n > 16) return false;
+    const char* a = fifo + (n - 1) * kAnimStride;  // a última entrada da fila é a mais nova
+    uint32_t sampler = 0;
+    int16_t animId = -1;
+    if (!readAt(a, kAnim_Parametric, sampler) || !readAt(a, kAnim_Id, animId)) return false;
+    name = animName(skel, animId);
+    parametric = sampler != 0;
+    return true;
+}
+
 const Action& currentAction() { return g_action; }
 const Action& currentBase() { return g_base; }
 const Action& currentUpper() { return g_upper; }

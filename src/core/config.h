@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "game/zombies.h"
+
 #include "core/window_keeper.h"
 #include "net/session.h"
 
@@ -44,6 +46,7 @@ struct Config {
     bool luaCommandFile = true;            // [debug] lua_command_file: executa sodcoop_cmd.lua (teste)
     bool animWatch = true;                 // [debug] anim_watch: registra as animações do jogador local
     // [puppet] modelo do fantoche (jogador remoto) e espelho local de teste
+    zombies::Config zombies;               // [zombies] enabled, radius, model
     std::string puppetModel = "characters/male/human/body/tshirt_jeans/variant/v01.cdf";  // model
     bool mirrorLocal = false;              // mirror_local=1: fantoche copia o jogador local (só com role=off)
     float mirrorOffsetX = 2.0f;            // mirror_offset_x (metros, eixo X do mundo)

@@ -19,7 +19,7 @@ Jogue o modo **Breakdown** junto com um amigo: dois sobreviventes no mesmo mundo
 
 O State of Decay original é single-player. Este mod adiciona uma camada de rede ao jogo por meio de uma DLL própria, sem alterar os arquivos originais. Cada jogador vê o outro dentro do mundo, com movimento e animação sincronizados.
 
-> ⚠️ **Projeto em desenvolvimento.** Ainda é um protótipo: por enquanto só os jogadores (movimento e golpes) são sincronizados. Zumbis, dano, inventário e veículos ainda não.
+> ⚠️ **Projeto em desenvolvimento.** Ainda é um protótipo: por enquanto são sincronizados os jogadores (movimento, golpes, armas e mira) e a posição dos zumbis. Dano, inventário e veículos ainda não.
 
 ## ✅ O que já funciona
 
@@ -31,11 +31,13 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 - [x] Golpes, pulos e quedas do outro jogador aparecem no personagem dele (ainda sem dano)
 - [x] A arma que o outro jogador está usando aparece na mão dele
 - [x] Mira, tiro e recarga do outro jogador aparecem no personagem dele
+- [x] Zumbis do host aparecem no mundo do cliente (só visual, ainda sem ataque/dano)
 
 ## 🛠️ Próximos passos
 
 - [ ] Dano dos golpes
-- [ ] Zumbis compartilhados (host como autoridade)
+- [ ] Zumbis: ataques e dano (host como autoridade)
+- [ ] Cliente usando o mesmo mundo/save do host
 - [ ] Inventário e itens
 - [ ] Veículos
 - [ ] Conexão pela internet (Steam), sem precisar abrir portas

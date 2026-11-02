@@ -26,6 +26,7 @@
 #include "game/local_player.h"
 #include "game/puppet.h"
 #include "game/remote_player.h"
+#include "game/zombies.h"
 #include "net/session.h"
 
 namespace {
@@ -147,6 +148,8 @@ const std::string& localWeapon(bool inWorld, DWORD now) {
 
 // Ferramenta de teste: se existir sodcoop_cmd.lua ao lado do exe, executa uma vez
 // (thread principal) e apaga. Ex.: System.ExecuteCommand("i_giveitem Pistol_M9").
+// Só com o jogador já no mundo: entidades criadas durante o carregamento do nível
+// ficam "unremovable", e trocar o nome da entidade de texto dispara um aviso do motor.
 void runCommandFile(DWORD now) {
     static DWORD lastCheck = 0;
     if (now - lastCheck < 1000) return;
@@ -160,8 +163,14 @@ void runCommandFile(DWORD now) {
     CloseHandle(f);
     DeleteFileW(path.c_str());
     buf[got] = 0;
+    puppet::ensureLuaHelpers();
+    engine::executeLua("SodCoop = SodCoop or {}; SodCoop.cmdResult = nil", "sodcoop_cmd");
     const bool ok = engine::executeLua(buf, "sodcoop_cmd");
     log::info("cmd: sodcoop_cmd.lua (%lu bytes) -> %s: %s", got, ok ? "OK" : "FALHOU", buf);
+    // O comando pode deixar um texto em SodCoop.cmdResult para o log.
+    std::string result;
+    if (puppet::readLuaText("SodCoop.cmdResult or ''", result) && !result.empty())
+        log::info("cmd: resultado: %s", result.c_str());
 }
 
 // Thread principal do jogo, uma vez por frame.
@@ -187,7 +196,6 @@ void onFrame() {
         log::info("cvars: sys_MaxFPS=%d -> %s", g_cfg.maxFps, ok ? "OK" : "FALHOU");
         fpsApplied = true;
     }
-    if (g_cfg.luaCommandFile) runCommandFile(now);
     engine::EntityId id = local_player::currentId();
     if (id != lastId) {
         lastId = id;
@@ -198,6 +206,7 @@ void onFrame() {
     const bool inWorld = id && local_player::sample(s);
     // Só considera o mundo "pronto" alguns segundos após o jogador local ser definido.
     const bool settled = inWorld && now - idSince >= kPuppetSpawnDelayMs;
+    if (g_cfg.luaCommandFile && settled) runCommandFile(now);
 
     // Velocidade horizontal suavizada (constante de tempo kSpeedTau); zera em teleporte.
     // A posição do jogador não muda em todo frame, então a velocidade instantânea
@@ -285,6 +294,14 @@ void onFrame() {
                   remote.state.yaw, now - remote.receivedAtMs);
     }
     remote_player::update(remote, settled, g_cfg.puppetModel, g_cfg.anim);
+
+    // Zumbis: o host manda os dele; o cliente desliga os próprios e mostra os do host.
+    if (g_cfg.net.role == net::Role::Host) {
+        const engine::Vec3 other{remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]};
+        zombies::updateHost(g_cfg.zombies, settled, s.pos, remote.connected && remote.state.hasPlayer, other);
+    } else {
+        zombies::updateClient(g_cfg.zombies, settled, s.pos);
+    }
 }
 
 DWORD WINAPI initThread(LPVOID) {

@@ -2,7 +2,9 @@
 
 #include <windows.h>
 #include <mmsystem.h>
+#include <cstddef>
 #include <cstring>
+#include <iterator>
 
 #include "core/clock.h"
 #include "core/log.h"
@@ -14,6 +16,7 @@ static_assert(sizeof(sodcoop::net::PlayerState::weapon) == sodcoop::net::kWeapon
 static_assert(sizeof(sodcoop::net::PlayerState::base) == sodcoop::net::kActionNameSize);
 static_assert(sizeof(sodcoop::net::PlayerState::upper) == sodcoop::net::kActionNameSize);
 static_assert(sizeof(sodcoop::net::PlayerState::aimPose) == sodcoop::net::kActionNameSize);
+static_assert(sizeof(sodcoop::net::ZombieState::model) == sodcoop::net::kZombieModelSize);
 
 namespace sodcoop::net {
 namespace {
@@ -23,6 +26,10 @@ UdpSocket g_socket;
 SRWLOCK g_lock = SRWLOCK_INIT;
 PlayerState g_local;       // protegido por g_lock
 RemoteState g_remote;      // protegido por g_lock
+std::vector<ZombieState> g_localZombies;            // host; protegido por g_lock
+std::map<uint16_t, RemoteZombie> g_remoteZombies;   // cliente; protegido por g_lock
+constexpr double kZombieSendInterval = 0.1;          // s
+constexpr double kZombieExpire = 1.5;                // s sem atualização = removido
 volatile bool g_running = false;
 HANDLE g_thread = nullptr;
 
@@ -82,11 +89,77 @@ void sendState() {
     send(&p, sizeof(p));
 }
 
+void sendZombies() {
+    AcquireSRWLockShared(&g_lock);
+    const std::vector<ZombieState> list = g_localZombies;
+    ReleaseSRWLockShared(&g_lock);
+    const uint32_t timeMs = static_cast<uint32_t>(static_cast<uint64_t>(clock::seconds() * 1000.0));
+    size_t i = 0;
+    do {
+        ZombiesPacket p = {};
+        fillHeader(p.h, PacketType::Zombies);
+        p.timeMs = timeMs;
+        for (; i < list.size() && p.count < kMaxZombiesPerPacket; ++i, ++p.count) {
+            const ZombieState& z = list[i];
+            ZombieEntry& e = p.e[p.count];
+            e.id = z.id;
+            e.flags = z.loop ? 1 : 0;
+            memcpy(e.pos, z.pos, sizeof(e.pos));
+            e.yaw = z.yaw;
+            memcpy(e.anim, z.anim, sizeof(e.anim));
+            e.anim[sizeof(e.anim) - 1] = 0;
+            memcpy(e.model, z.model, sizeof(e.model));
+            e.model[sizeof(e.model) - 1] = 0;
+        }
+        // Só as entradas usadas vão para a rede.
+        send(&p, static_cast<int>(offsetof(ZombiesPacket, e) + p.count * sizeof(ZombieEntry)));
+    } while (i < list.size());
+}
+
+void handleZombies(const char* data, int size) {
+    ZombiesPacket p = {};
+    memcpy(&p, data, size < (int)sizeof(p) ? size : sizeof(p));
+    const int fits = (size - (int)offsetof(ZombiesPacket, e)) / (int)sizeof(ZombieEntry);
+    const int count = p.count < fits ? p.count : fits;
+    const double now = clock::seconds();
+    AcquireSRWLockExclusive(&g_lock);
+    for (int i = 0; i < count && i < kMaxZombiesPerPacket; ++i) {
+        const ZombieEntry& e = p.e[i];
+        ZombieState z;
+        z.id = e.id;
+        z.loop = (e.flags & 1) != 0;
+        memcpy(z.pos, e.pos, sizeof(z.pos));
+        z.yaw = e.yaw;
+        memcpy(z.anim, e.anim, sizeof(z.anim));
+        z.anim[sizeof(z.anim) - 1] = 0;
+        memcpy(z.model, e.model, sizeof(z.model));
+        z.model[sizeof(z.model) - 1] = 0;
+        auto it = g_remoteZombies.find(z.id);
+        if (it == g_remoteZombies.end()) {
+            RemoteZombie r;
+            r.cur = r.prev = z;
+            r.curAtSec = r.prevAtSec = now;
+            g_remoteZombies[z.id] = r;
+        } else {
+            it->second.prev = it->second.cur;
+            it->second.prevAtSec = it->second.curAtSec;
+            it->second.cur = z;
+            it->second.curAtSec = now;
+        }
+    }
+    for (auto it = g_remoteZombies.begin(); it != g_remoteZombies.end();)
+        it = now - it->second.curAtSec > kZombieExpire ? g_remoteZombies.erase(it) : std::next(it);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void setConnected(bool connected, uint32_t peerId) {
     AcquireSRWLockExclusive(&g_lock);
     g_remote.connected = connected;
     g_remote.peerId = peerId;
-    if (!connected) g_remote.state = PlayerState{};
+    if (!connected) {
+        g_remote.state = PlayerState{};
+        g_remoteZombies.clear();
+    }
     ReleaseSRWLockExclusive(&g_lock);
 }
 
@@ -160,6 +233,11 @@ void handlePacket(const char* data, int size, const Address& from) {
         disconnect("o outro lado saiu");
         return;
     }
+    if (h.type == PacketType::Zombies && g_cfg.role == Role::Client &&
+        size >= (int)offsetof(ZombiesPacket, e)) {
+        handleZombies(data, size);
+        return;
+    }
     if (h.type == PacketType::State && size >= (int)sizeof(StatePacket)) {
         if (h.seq <= g_lastPeerSeq) return;  // atrasado ou duplicado
         g_lastPeerSeq = h.seq;
@@ -217,6 +295,11 @@ DWORD WINAPI netThread(LPVOID) {
         if (g_peerKnown && nowSec >= nextSend) {
             sendState();
             nextSend = (nowSec - nextSend > sendInterval) ? nowSec + sendInterval : nextSend + sendInterval;
+        }
+        static double nextZombies = 0;
+        if (g_cfg.role == Role::Host && g_peerKnown && nowSec >= nextZombies) {
+            sendZombies();
+            nextZombies = nowSec + kZombieSendInterval;
         }
         if (now - lastStats >= 10000) {
             log::info("net: %s conectado=%d pacotes recebidos(10s)=%u enviados(seq)=%u", roleName(g_cfg.role),
@@ -286,6 +369,22 @@ RemoteState getRemoteState() {
     RemoteState r = g_remote;
     ReleaseSRWLockShared(&g_lock);
     return r;
+}
+
+void setLocalZombies(const std::vector<ZombieState>& zombies) {
+    AcquireSRWLockExclusive(&g_lock);
+    g_localZombies = zombies;
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+std::map<uint16_t, RemoteZombie> getRemoteZombies() {
+    const double now = clock::seconds();
+    AcquireSRWLockExclusive(&g_lock);
+    for (auto it = g_remoteZombies.begin(); it != g_remoteZombies.end();)
+        it = now - it->second.curAtSec > kZombieExpire ? g_remoteZombies.erase(it) : std::next(it);
+    std::map<uint16_t, RemoteZombie> copy = g_remoteZombies;
+    ReleaseSRWLockExclusive(&g_lock);
+    return copy;
 }
 
 }  // namespace sodcoop::net

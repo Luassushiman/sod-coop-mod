@@ -1,6 +1,6 @@
-# Protocolo de rede (v8)
+# Protocolo de rede (v10)
 
-Histórico: v1 = posição/yaw; v2 = `State.speed` (escolha de animação); v3 = `State.timeMs` vira relógio de alta precisão (`QueryPerformanceCounter`, ms), base da interpolação; v4 = `State.action`/`actionSeq` (ataques, pulos e outras ações); v5 = `State.weapon` (modelo da arma na mão); v6 = `base`/`upper`/`upperSeq`; v7 = `aiming`/`aimOffset`; v8 = `aimPose`. Versões diferentes são recusadas (`Reject(2)`).
+Histórico: v1 = posição/yaw; v2 = `State.speed` (escolha de animação); v3 = `State.timeMs` vira relógio de alta precisão (`QueryPerformanceCounter`, ms), base da interpolação; v4 = `State.action`/`actionSeq` (ataques, pulos e outras ações); v5 = `State.weapon` (modelo da arma na mão); v6 = `base`/`upper`/`upperSeq`; v7 = `aiming`/`aimOffset`; v8 = `aimPose`; v9 = pacote `Zombies`; v10 = `ZombieEntry.model`. Versões diferentes são recusadas (`Reject(2)`).
 
 Código: `src/net/protocol.h` (formato), `src/net/session.cpp` (lógica) e `src/net/udp_socket.cpp` (transporte).
 
@@ -17,8 +17,8 @@ Todo pacote começa com `Header` (16 bytes, little-endian, `#pragma pack(1)`):
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `magic` | u32 | `0x43444F53` ("SODC"); pacotes com outro valor são ignorados |
-| `version` | u16 | `kProtocolVersion` = 8; se for diferente, o host responde `Reject(2)` |
-| `type` | u8 | 1 Hello, 2 Welcome, 3 Reject, 4 State, 5 Bye |
+| `version` | u16 | `kProtocolVersion` = 10; se for diferente, o host responde `Reject(2)` |
+| `type` | u8 | 1 Hello, 2 Welcome, 3 Reject, 4 State, 5 Bye, 6 Zombies |
 | `reserved` | u8 | 0 |
 | `senderId` | u32 | token aleatório da instância (identificação do jogador) |
 | `seq` | u32 | sequência crescente por remetente; `State` com `seq` ≤ último aceito é descartado |
@@ -30,6 +30,7 @@ Todo pacote começa com `Header` (16 bytes, little-endian, `#pragma pack(1)`):
 | Reject | `u8 reason` (1 = sessão cheia, 2 = versão) | host → cliente |
 | State | `u32 timeMs, u8 hasPlayer, f32 pos[3], f32 yaw, f32 speed, char action[48], u16 actionSeq, char weapon[128], char base[48], char upper[48], u16 upperSeq, u8 aiming, f32 aimOffset[3], char aimPose[48]` | ambos, a `send_rate_hz` (também serve de keep-alive) |
 | Bye | — | ambos, ao encerrar |
+| Zombies | `u32 timeMs, u8 count, ZombieEntry e[count]` (até 10; só as entradas usadas vão na rede). `ZombieEntry` = `u16 id, u8 flags (bit 0 = loop), f32 pos[3], f32 yaw, char anim[32], char model[64]` | host → cliente, 10 Hz (vários pacotes por rodada) |
 
 Regras (seguindo o Co-op Anything): nenhum ponteiro ou endereço no protocolo, só valores e IDs; movimento vai em pacotes não confiáveis; desconexão é detectada por timeout de keep-alive (`timeout_ms`), sem confiar só no `Bye`.
 
@@ -60,6 +61,12 @@ Regras (seguindo o Co-op Anything): nenhum ponteiro ou endereço no protocolo, s
 - **Parte de cima (`upper`, `upperSeq`):** animação da camada 1 do remetente (segurar arma, tiro, recarga), tocada na camada 2 do fantoche; idles em loop, o resto uma vez; vazio = para a camada.
 - **Mira (`aiming`, `aimOffset`, `aimPose`):** estado do IK de mira do remetente (lido do PoseBlenderAim), alvo relativo à posição e nome da aim pose da arma. Com arma longa, o fantoche usa um clipe com a arma no ombro (parado ou andando/correndo para frente).
 - **Arma (`weapon`):** caminho do `.cgf` da arma na mão (vazio = mão vazia), lido a cada 0,5 s; o receptor aplica o estado mais recente (sem o atraso de interpolação) e só aceita `[A-Za-z0-9_/.-]` sem `..`.
+
+## Zumbis
+
+- O host lista os `ULZombie<n>` num raio de `[zombies] radius` (80 m) de cada jogador; `id` = `<n>`.
+- O cliente guarda o estado atual e o anterior de cada zumbi e interpola entre eles (atraso de ~0,1 s); zumbi sem atualização por 1,5 s é removido.
+- O buffer de recepção passou a 1400 bytes (`kMaxPacketSize`).
 
 ## Configuração (`sodcoop.ini`, seção `[net]`)
 

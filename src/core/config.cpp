@@ -46,6 +46,9 @@ Config loadConfig() {
     c.luaCommandFile = GetPrivateProfileIntW(L"debug", L"lua_command_file", 1, ini.c_str()) != 0;
     c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 1, ini.c_str()) != 0;
     c.puppetModel = readString(ini, L"puppet", L"model", c.puppetModel);
+    c.zombies.enabled = GetPrivateProfileIntW(L"zombies", L"enabled", 1, ini.c_str()) != 0;
+    c.zombies.radius = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"radius", 80, ini.c_str()));
+    c.zombies.model = readString(ini, L"zombies", L"model", c.zombies.model);
     c.mirrorLocal = GetPrivateProfileIntW(L"puppet", L"mirror_local", 0, ini.c_str()) != 0;
     c.mirrorOffsetX = readFloat(ini, L"puppet", L"mirror_offset_x", c.mirrorOffsetX);
     c.mirrorOffsetY = readFloat(ini, L"puppet", L"mirror_offset_y", c.mirrorOffsetY);

@@ -32,4 +32,12 @@ const Action& currentUpper();
 // animações da camada 0; vazio se nenhuma tem. Sem seq.
 const Action& currentAimPose();
 
+// Animação mais nova da camada 0 de uma entidade qualquer (ex.: zumbi).
+// false se a entidade não tem esqueleto ou a camada está vazia.
+bool newestLayer0(void* entity, std::string& name, bool& parametric);
+
+// Arquivo do modelo base do personagem (CCharInstance+0x88 -> modelo, caminho em +4;
+// é o nome que o motor usa nas mensagens "... for model: %s"). "" se ilegível.
+std::string modelPath(void* entity);
+
 }  // namespace sodcoop::anim_watch

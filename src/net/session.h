@@ -8,7 +8,9 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
+#include <vector>
 
 namespace sodcoop::net {
 
@@ -50,10 +52,32 @@ struct RemoteState {
     uint32_t sequence = 0;
 };
 
+// Zumbi como trafega na rede (host -> cliente).
+struct ZombieState {
+    uint16_t id = 0;
+    bool loop = false;
+    float pos[3] = {};
+    float yaw = 0;
+    char anim[32] = {};
+    char model[64] = {};
+};
+
+// Último estado recebido de um zumbi, com o anterior para interpolar.
+struct RemoteZombie {
+    ZombieState cur, prev;
+    double curAtSec = 0, prevAtSec = 0;  // clock::seconds() local da chegada
+};
+
 bool start(const SessionConfig& cfg);
 void stop();
 
 void setLocalState(const PlayerState& s);
 RemoteState getRemoteState();
+
+// Host: zumbis a enviar na próxima rodada (10 Hz).
+void setLocalZombies(const std::vector<ZombieState>& zombies);
+// Cliente: zumbis recebidos (id -> estado). Entradas sem atualização somem
+// depois de 1,5 s.
+std::map<uint16_t, RemoteZombie> getRemoteZombies();
 
 }  // namespace sodcoop::net

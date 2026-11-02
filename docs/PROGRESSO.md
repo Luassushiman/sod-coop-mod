@@ -93,3 +93,22 @@ Limitações conhecidas da rede atual:
 Limitações conhecidas do fantoche atual:
 - O modelo é só o corpo (`.cdf` de body); pode aparecer sem cabeça.
 - O movimento usa uma chamada Lua por frame (`ExecuteBuffer` + compilação de um trecho pequeno). Basta para o protótipo; trocar por `IEntity::SetWorldTM` nativo (vtbl `+0x54`) quando o EntityId do fantoche for obtido no lado C++.
+
+## Zumbis compartilhados — etapa 1: espelho visual (2026-11-02)
+
+Host autoritativo, como no Co-op Anything. Código: `src/game/zombies.cpp`.
+
+| Item | Status | Evidência |
+|---|---|---|
+| Listar os zumbis do host (entidades `ULZombie<n>`) com posição, direção, animação e modelo | ✅ | log `zombies: host enviando N zumbi(s)` |
+| Desligar os zumbis do client (`zm_disable 1` + `zm_killAll` ao entrar no mundo; conferência a cada 10 s) | ✅ | 0 zumbis depois de andar ~165 m com `zm_disable 1` |
+| Pacote `Zombies` (10 Hz, até 10 por pacote) e fantoche por zumbi no client, interpolado | ✅ | Feral: mesma posição e animação nas duas janelas, confirmado pelo usuário |
+| Modelo por tipo: especiais `characters/freaks/<tipo>/<tipo>.cdf`; comuns, modelo simplificado (EigenZombie) por gênero | ✅ parcial | Feral confirmado (troca feita ao vivo); a regra nova só vale a partir do próximo reinício |
+
+Limitações da etapa 1:
+- **Sem interação**: os zumbis não atacam o client e os golpes/tiros do client não os acertam (próxima etapa: dano pelo host).
+- Zumbis comuns aparecem com o modelo simplificado (as partes sorteadas pelo jogo não são replicadas).
+- O host só tem zumbis perto dele: o client longe do host fica sem zumbis.
+- Os saves do host e do client são diferentes (ex.: o client já tem base); o client ainda não usa o mundo do host.
+- `zm_spawn` (cvar inteira) não criou zumbis nos testes; para testar usamos zumbis existentes e teletransporte (`SetWorldPos` no ator, via `sodcoop_cmd.lua`).
+- `zm_playerInvisible 1` não impediu um Feral de atacar.

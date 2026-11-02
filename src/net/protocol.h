@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 8;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose
+inline constexpr uint16_t kProtocolVersion = 10;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -17,6 +17,7 @@ enum class PacketType : uint8_t {
     Reject = 3,   // host -> cliente: recusado (sessão cheia / versão)
     State = 4,    // ambos: estado do jogador local (também serve de keep-alive)
     Bye = 5,      // ambos: saída limpa
+    Zombies = 6,  // host -> cliente: zumbis perto dos jogadores (vários pacotes por rodada)
 };
 
 #pragma pack(push, 1)
@@ -61,8 +62,28 @@ struct StatePacket {
     float aimOffset[3];            // alvo da mira - posição do jogador (m), dá direção e inclinação
     char aimPose[kActionNameSize]; // animação de aim poses da arma (ex.: AimPoses_shotgun)
 };
+inline constexpr int kZombieAnimSize = 32;
+inline constexpr int kZombieModelSize = 64;
+inline constexpr int kMaxZombiesPerPacket = 10;
+
+struct ZombieEntry {
+    uint16_t id;                  // número do nome "ULZombie<id>" no host
+    uint8_t flags;                // bit 0: animação em loop
+    float pos[3];
+    float yaw;
+    char anim[kZombieAnimSize];   // animação mais nova da camada 0 do zumbi no host
+    char model[kZombieModelSize]; // modelo base do personagem no host (.chr)
+};
+
+struct ZombiesPacket {
+    Header h;
+    uint32_t timeMs;  // relógio do host (ms), como StatePacket.timeMs
+    uint8_t count;    // entradas válidas em e[]
+    ZombieEntry e[kMaxZombiesPerPacket];
+};
 #pragma pack(pop)
 
-inline constexpr int kMaxPacketSize = 512;
+inline constexpr int kMaxPacketSize = 1400;
+static_assert(sizeof(ZombiesPacket) <= kMaxPacketSize, "pacote de zumbis maior que o buffer");
 
 }  // namespace sodcoop::net

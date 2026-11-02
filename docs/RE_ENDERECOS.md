@@ -160,6 +160,17 @@ Registro dos bindings em `FUN_00B8DA10`. Os handlers abaixo chamam os métodos d
 
 Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal_chop_fromright/fromleft` e `Strike_bat_ground_no_step*` (camada 0), pose de arma `weaponoffset_Bat` (camada 6), `additive_look_around*` (camada 4), `lipsync_*` (camada 5), `Item_ub_pistol_stow` (camada 1), pulos/quedas `Environmental_*` (camada 0).
 
+## 4d. Zumbis (2026-11-02)
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| Entidades de zumbi | nome `ULZombie<n>`; classe = tipo (`FreshGrunt`, `Feral`, `Juggernaut`...) | VALIDADO-RUNTIME | `System.GetEntitiesInSphere` pelo `sodcoop_cmd.lua` |
+| Dois modos | longe: simulação "Lab AI"; perto: entidade com "Cry AI" (`zm_activationDist`/`zm_deactivationDist`) | FATO | textos de ajuda das cvars |
+| `zm_disable 1` | desliga os zumbis "lab": com `zm_killAll`, o mundo fica sem zumbis e eles não voltam ao andar | VALIDADO-RUNTIME | contagem 3 → 0, e 0 depois de ~165 m |
+| `zm_spawn` | cvar inteira (registrada com ponteiro em `0x01DF2E6C`), não comando; `zm_spawn 5` não criou zumbis por perto | VALIDADO-RUNTIME | registro em `0x0134D104` |
+| Modelo base do personagem | `ICharacterInstance` (= `CCharInstance`) `+0x88` → modelo; caminho (char*) em `+4`. Zumbi comum: `characters/male/zombie/skeleton/skeleton.chr` (só esqueleto; partes de `zombievariant.xml`); especial: `characters/freaks/<tipo>/skeleton/skeleton.chr`, com modelo completo em `characters/freaks/<tipo>/<tipo>.cdf` | VALIDADO-RUNTIME | log `modelo novo no host`; mensagem "No AimIK-Setup for model: %s" em `0x00A76FB0` |
+| Comandos de comunidade | `com_add*` põem no **estoque da comunidade** (handler `com_addGun` `0x013E01C0`, inventário em `+0x244` do registro da comunidade) | CONFIRMADO-ESTÁTICO | textos de ajuda e descompilação |
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).
