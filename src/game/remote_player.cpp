@@ -210,6 +210,8 @@ bool g_pistolPose = false; // pose de mira de pistola aplicada (camada 1)
 std::string g_weapon;      // arma presa no fantoche
 DWORD g_weaponRetryMs = 0;
 
+unsigned g_spawnCount = 0;
+
 void despawn(const char* reason) {
     if (!g_alive) return;
     log::info("remote_player: removendo fantoche (%s)", reason);
@@ -286,6 +288,10 @@ void diagnose(const Snapshot& s, bool rootCompensation) {
 
 }  // namespace
 
+void respawn(const char* reason) { despawn(reason); }
+
+unsigned spawnCount() { return g_spawnCount; }
+
 void update(const net::RemoteState& remote, bool localInWorld, const std::string& model,
             const AnimConfig& anim) {
     const DWORD now = GetTickCount();
@@ -322,7 +328,10 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         g_aimDown = g_pistolPose = false;
         g_upperSeq = static_cast<uint16_t>(s.upperSeq - 1);  // toca a camada 1 atual
         if (!g_alive) g_retryAfterMs = now + 3000;
-        else log::info("remote_player: fantoche do jogador %08X criado", remote.peerId);
+        else {
+            ++g_spawnCount;
+            log::info("remote_player: fantoche do jogador %08X criado (%s)", remote.peerId, model.c_str());
+        }
         return;
     }
 

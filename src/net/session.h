@@ -94,4 +94,9 @@ void sendHit(const HitEvent& hit);
 // Golpes recebidos desde a última chamada.
 std::vector<HitEvent> takeHits();
 
+// Aparência do jogador local ("anexo=arquivo;..."), enviada a cada 2 s.
+void setLocalLook(const std::string& parts);
+// Última aparência recebida do outro lado; devolve a sequência (0 = nenhuma).
+uint16_t getRemoteLook(std::string& parts);
+
 }  // namespace sodcoop::net

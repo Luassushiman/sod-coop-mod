@@ -12,5 +12,9 @@ namespace sodcoop::remote_player {
 // localInWorld: o jogador local está no mundo (há nível carregado).
 void update(const net::RemoteState& remote, bool localInWorld, const std::string& model,
             const AnimConfig& anim);
+// Remove o fantoche; o próximo update() cria outro (com o modelo passado então).
+void respawn(const char* reason);
+// Quantos fantoches já foram criados (muda a cada criação).
+unsigned spawnCount();
 
 }  // namespace sodcoop::remote_player

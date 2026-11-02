@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <iterator>
 
@@ -35,6 +36,11 @@ std::vector<HitEvent> g_inHits;    // recebidos; protegido por g_lock
 uint16_t g_hitSeq = 0;             // thread de rede
 uint16_t g_lastHitSeq = 0;         // último recebido (thread de rede)
 bool g_haveHitSeq = false;
+std::string g_localLook;    // protegido por g_lock
+uint16_t g_localLookSeq = 0;
+std::string g_remoteLook;   // protegido por g_lock
+uint16_t g_remoteLookSeq = 0;
+constexpr double kLookSendInterval = 2.0;  // s
 volatile bool g_running = false;
 HANDLE g_thread = nullptr;
 
@@ -192,6 +198,29 @@ void handleHit(const char* data) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void sendLook() {
+    LookPacket p = {};
+    AcquireSRWLockShared(&g_lock);
+    p.lookSeq = g_localLookSeq;
+    snprintf(p.parts, sizeof(p.parts), "%s", g_localLook.c_str());
+    ReleaseSRWLockShared(&g_lock);
+    if (!p.parts[0]) return;
+    fillHeader(p.h, PacketType::Look);
+    send(&p, sizeof(p));
+}
+
+void handleLook(const char* data) {
+    LookPacket p;
+    memcpy(&p, data, sizeof(p));
+    p.parts[sizeof(p.parts) - 1] = 0;
+    AcquireSRWLockExclusive(&g_lock);
+    if (p.lookSeq != g_remoteLookSeq || g_remoteLook != p.parts) {
+        g_remoteLook = p.parts;
+        g_remoteLookSeq = p.lookSeq ? p.lookSeq : 1;
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void setConnected(bool connected, uint32_t peerId) {
     AcquireSRWLockExclusive(&g_lock);
     g_remote.connected = connected;
@@ -200,6 +229,8 @@ void setConnected(bool connected, uint32_t peerId) {
         g_remote.state = PlayerState{};
         g_remoteZombies.clear();
         g_haveHitSeq = false;  // o outro lado recomeça a sequência ao reabrir
+        g_remoteLook.clear();
+        g_remoteLookSeq = 0;
     }
     ReleaseSRWLockExclusive(&g_lock);
 }
@@ -279,6 +310,10 @@ void handlePacket(const char* data, int size, const Address& from) {
         handleZombies(data, size);
         return;
     }
+    if (h.type == PacketType::Look && size >= (int)sizeof(LookPacket)) {
+        handleLook(data);
+        return;
+    }
     if (h.type == PacketType::Hit && size >= (int)sizeof(HitPacket)) {
         handleHit(data);
         return;
@@ -344,6 +379,11 @@ DWORD WINAPI netThread(LPVOID) {
             nextSend = (nowSec - nextSend > sendInterval) ? nowSec + sendInterval : nextSend + sendInterval;
         }
         if (g_peerKnown) sendHits();
+        static double nextLook = 0;
+        if (g_peerKnown && nowSec >= nextLook) {
+            sendLook();
+            nextLook = nowSec + kLookSendInterval;
+        }
         static double nextZombies = 0;
         if (g_cfg.role == Role::Host && g_peerKnown && nowSec >= nextZombies) {
             sendZombies();
@@ -447,6 +487,24 @@ std::map<uint32_t, RemoteZombie> getRemoteZombies() {
     std::map<uint32_t, RemoteZombie> copy = g_remoteZombies;
     ReleaseSRWLockExclusive(&g_lock);
     return copy;
+}
+
+void setLocalLook(const std::string& parts) {
+    AcquireSRWLockExclusive(&g_lock);
+    if (parts != g_localLook) {
+        g_localLook = parts;
+        ++g_localLookSeq;
+        if (!g_localLookSeq) g_localLookSeq = 1;
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+uint16_t getRemoteLook(std::string& parts) {
+    AcquireSRWLockShared(&g_lock);
+    parts = g_remoteLook;
+    const uint16_t seq = g_remoteLookSeq;
+    ReleaseSRWLockShared(&g_lock);
+    return seq;
 }
 
 }  // namespace sodcoop::net

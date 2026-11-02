@@ -184,6 +184,17 @@ Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal
 | `ITimeOfDay::SetTime(float hour, bool forceUpdate)` / `GetTime()` | vtbl `+0x14` / `+0x18` | VALIDADO-RUNTIME | client acertado para a hora do host e mantido |
 | `e_TimeOfDay` | cvar só de leitura na prática: SetCVar não muda o relógio | VALIDADO-RUNTIME | 6,55 pedido, 6,16 lido |
 
+## 4f. Personagem e anexos (2026-11-02)
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| `ICharacterInstance::GetIAttachmentManager` | vtbl `+0x1C` (`lea eax,[ecx+0x58]`) | VALIDADO-RUNTIME | bytes lidos da memória do client |
+| `IAttachmentManager` | `+0x18` GetInterfaceByName, `+0x1C` GetInterfaceByIndex, `+0x20` GetAttachmentCount, `+0x24` GetIndexByName | CONFIRMADO-ESTÁTICO | `0x00B21E90`, `0x00B21E70`, `0x00B48470`, `0x00B21E20` |
+| `IAttachment` | `+0x04` GetName (`this+0xA0`), `+0x5C` AddBinding, `+0x60` GetIAttachmentObject (`this+0xA4`), `+0x64` ClearBinding; tipo em `this+0xB4` (2 = pele) | CONFIRMADO-ESTÁTICO | `0x0137D2F0`, `0x00B1EB90`, `0x01372890`, `0x00B21290` |
+| Objeto de anexo de personagem | vtable `0x017992C8`; `+0x08` GetType = 2; `+0x30` GetICharacterInstance (`this+4`) | VALIDADO-RUNTIME | partes lidas do jogador |
+| Prender parte de pele | `0x0131BCC0` cdecl `(ICharacterInstance*, const char* anexo, const char* arquivo.chr, bool clonarMaterial)`; cria o anexo (tipo 2), `ICharacterManager` (`gEnv+0x4C`) `+0x0C` CreateInstance e liga | VALIDADO-RUNTIME | fantoche montado com 6 partes |
+| Troca de sobrevivente | comandos `fm_nextMember` / `fm_prevMember` (`0x015DF630`) | VALIDADO-RUNTIME | aparência do client mudou |
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).

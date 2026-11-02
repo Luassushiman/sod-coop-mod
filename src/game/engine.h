@@ -5,6 +5,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace sodcoop::engine {
 
@@ -35,6 +37,12 @@ inline constexpr size_t kPoseBlenderAim_Use = 0x04;
 inline constexpr size_t kPoseBlenderAim_Target = 0x08;
 inline constexpr size_t kPoseBlenderAim_Weight = 0x18;
 
+// Prende uma parte (.chr) a um personagem como anexo de pele: cria o anexo `name`
+// (tipo 2), carrega o modelo pelo ICharacterManager e liga. cdecl
+// IAttachmentObject* (ICharacterInstance*, const char* name, const char* chrPath, bool cloneMaterial).
+// Usada pelo jogo para montar os zumbis (0x01320270). O anexo `name` não pode existir.
+inline constexpr uintptr_t kAttachSkinPart = 0x0131BCC0;
+
 // Primeiros bytes de kSetLocalActor depois que o SteamStub descriptografa a .text.
 inline constexpr unsigned char kSetLocalActorPrologue[] = {0x55, 0x56, 0x57, 0x8B, 0x7C, 0x24, 0x10};
 
@@ -60,6 +68,18 @@ inline constexpr size_t kStatObj_GetFilePath = 0xA0;          // const char* () 
 inline constexpr size_t kEntity_GetCharacter = 0x144;            // ICharacterInstance* (int slot)
 inline constexpr size_t kCharacter_GetISkeletonAnim = 0x10;      // ISkeletonAnim* ()
 inline constexpr size_t kCharacter_GetISkeletonPose = 0x14;      // ISkeletonPose* () — bind GetSlotHelperPos
+// Anexos (binds HideAttachment 0x00B99FE0 / GetAttachmentCGF 0x00B95020; vtables lidas em runtime).
+inline constexpr size_t kCharacter_GetIAttachmentManager = 0x1C;  // IAttachmentManager* () = this+0x58
+inline constexpr size_t kAttachmentManager_GetInterfaceByName = 0x18;   // IAttachment* (const char*)
+inline constexpr size_t kAttachmentManager_GetInterfaceByIndex = 0x1C;  // IAttachment* (uint)
+inline constexpr size_t kAttachmentManager_GetAttachmentCount = 0x20;   // int ()
+inline constexpr size_t kAttachment_GetName = 0x04;               // const char* () = this+0xA0
+inline constexpr size_t kAttachment_GetIAttachmentObject = 0x60;  // IAttachmentObject* () = this+0xA4
+inline constexpr size_t kAttachmentObject_GetType = 0x08;         // int (): 2 = personagem (pele)
+inline constexpr size_t kAttachmentObject_GetICharacterInstance = 0x30;  // ICharacterInstance* () = this+4
+// CCharInstance+0x88 -> modelo; caminho (char*) em modelo+4.
+inline constexpr size_t kCharInstance_Model = 0x88;
+inline constexpr size_t kCharModel_FilePath = 0x04;
 inline constexpr size_t kGameFramework_GetIActorSystem = 0x64;  // IActorSystem* () — bind Actor:SetHealth 0x015435D0
 inline constexpr size_t kActorSystem_GetActor = 0x0C;            // IActor* (EntityId)
 inline constexpr size_t kActor_SetHealth = 0x5C;                 // void (float) — NÃO chamar em zumbi (fechou o jogo)
@@ -113,6 +133,14 @@ int getSlotCount(void* entity);
 // Arquivo do modelo estático (.cgf) carregado no slot; "" se não houver.
 const char* getSlotModelPath(void* entity, int slot);
 bool getWorldAngles(void* entity, Vec3& out);
+
+// Partes de pele (anexos do tipo personagem) do slot 0: nome do anexo -> arquivo .chr.
+struct SkinPart {
+    std::string name, path;
+};
+bool listSkinParts(void* entity, std::vector<SkinPart>& out);
+// Prende a parte `path` no anexo `name` do slot 0 (o anexo não pode existir; ver kAttachSkinPart).
+bool attachSkinPart(void* entity, const char* name, const char* path);
 
 // Hora do dia do motor (ITimeOfDay), em horas 0..24.
 bool getTimeOfDay(float& hour);

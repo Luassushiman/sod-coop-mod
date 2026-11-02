@@ -27,6 +27,7 @@
 #include "game/local_player.h"
 #include "game/puppet.h"
 #include "game/remote_player.h"
+#include "game/appearance.h"
 #include "game/zombies.h"
 #include "net/session.h"
 
@@ -432,7 +433,9 @@ void onFrame() {
                   remote.state.hasPlayer, remote.state.pos[0], remote.state.pos[1], remote.state.pos[2],
                   remote.state.yaw, now - remote.receivedAtMs);
     }
-    remote_player::update(remote, settled, g_cfg.puppetModel, g_cfg.anim);
+    remote_player::update(remote, settled, appearance::puppetModel(g_cfg.puppetModel), g_cfg.anim);
+    appearance::updateLocal(settled, id);
+    appearance::updatePuppet(settled && remote.connected && remote.state.hasPlayer);
 
     // Zumbis: o host manda os dele; o cliente desliga os próprios e mostra os do host.
     if (g_cfg.net.role == net::Role::Host) {

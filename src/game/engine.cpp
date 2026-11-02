@@ -205,6 +205,62 @@ bool getWorldAngles(void* entity, Vec3& out) {
 }
 
 namespace {
+void* characterOf(void* entity) {
+    if (!looksLikeObject(entity)) return nullptr;
+    using Fn = void*(__thiscall*)(void*, int);
+    void* character = vfunc<Fn>(entity, vt::kEntity_GetCharacter)(entity, 0);
+    return looksLikeObject(character) ? character : nullptr;
+}
+
+const char* characterFilePath(const void* character) {
+    auto inst = static_cast<const char*>(character);
+    if (!isReadable(inst + vt::kCharInstance_Model, 4)) return nullptr;
+    auto model = *reinterpret_cast<const char* const*>(inst + vt::kCharInstance_Model);
+    if (!isReadable(model + vt::kCharModel_FilePath, 4)) return nullptr;
+    const char* path = *reinterpret_cast<const char* const*>(model + vt::kCharModel_FilePath);
+    return isReadable(path, 1) ? path : nullptr;
+}
+}  // namespace
+
+bool listSkinParts(void* entity, std::vector<SkinPart>& out) {
+    out.clear();
+    void* character = characterOf(entity);
+    if (!character) return false;
+    using GetPtr_t = void*(__thiscall*)(void*);
+    void* am = vfunc<GetPtr_t>(character, vt::kCharacter_GetIAttachmentManager)(character);
+    if (!looksLikeObject(am)) return false;
+    using Count_t = int(__thiscall*)(void*);
+    using ByIndex_t = void*(__thiscall*)(void*, unsigned);
+    using Name_t = const char*(__thiscall*)(void*);
+    using Type_t = int(__thiscall*)(void*);
+    const int count = vfunc<Count_t>(am, vt::kAttachmentManager_GetAttachmentCount)(am);
+    for (int i = 0; i < count && i < 64; ++i) {
+        void* att = vfunc<ByIndex_t>(am, vt::kAttachmentManager_GetInterfaceByIndex)(am, static_cast<unsigned>(i));
+        if (!looksLikeObject(att)) continue;
+        void* obj = vfunc<GetPtr_t>(att, vt::kAttachment_GetIAttachmentObject)(att);
+        if (!looksLikeObject(obj) || vfunc<Type_t>(obj, vt::kAttachmentObject_GetType)(obj) != 2) continue;
+        void* part = vfunc<GetPtr_t>(obj, vt::kAttachmentObject_GetICharacterInstance)(obj);
+        const char* name = vfunc<Name_t>(att, vt::kAttachment_GetName)(att);
+        const char* path = looksLikeObject(part) ? characterFilePath(part) : nullptr;
+        if (!isReadable(name, 1) || !path) continue;
+        out.push_back({name, path});
+    }
+    return true;
+}
+
+bool attachSkinPart(void* entity, const char* name, const char* path) {
+    void* character = characterOf(entity);
+    if (!character) return false;
+    using GetPtr_t = void*(__thiscall*)(void*);
+    using ByName_t = void*(__thiscall*)(void*, const char*);
+    void* am = vfunc<GetPtr_t>(character, vt::kCharacter_GetIAttachmentManager)(character);
+    if (!looksLikeObject(am) || vfunc<ByName_t>(am, vt::kAttachmentManager_GetInterfaceByName)(am, name))
+        return false;  // a função do jogo não trata anexo já existente
+    using Attach_t = void*(__cdecl*)(void*, const char*, const char*, bool);
+    return reinterpret_cast<Attach_t>(kAttachSkinPart)(character, name, path, false) != nullptr;
+}
+
+namespace {
 void* timeOfDay() {
     void* engine3d = gEnvField(genv::k3DEngine);
     if (!looksLikeObject(engine3d)) return nullptr;

@@ -225,3 +225,16 @@ Limitações da etapa 1:
 - Acesso: `gEnv+0x24` (I3DEngine) → vtbl `+0x2E0` `GetTimeOfDay()` → `ITimeOfDay` com `SetTime(float, bool)` em `+0x14` e `GetTime()` em `+0x18` (uso do próprio motor em `0x00794620`).
 - Teste: client entrou com 0,98 h de diferença; foi acertado na hora e ficou a ~0,003 h do host (7,217 h × 7,214 h); depois, só um acerto pequeno de vez em quando (o relógio do jogo não desfaz o acerto).
 - Clima: não sincronizado. Não foi achado um sistema de clima no Breakdown (só ajustes gráficos de chuva, `r_Rain*`).
+
+## Mesmo mundo — etapa 3: outro sobrevivente e aparência no fantoche (2026-11-02) ✅ parcial
+
+- Troca de sobrevivente: comandos de console do jogo `fm_nextMember` / `fm_prevMember` (registrados em `0x015DF630`). A entidade do jogador continua a mesma ("Dude", id 0x7777); o jogo troca as partes e os dados.
+- Um sobrevivente é um esqueleto (`characters/male/human/skeleton/skeleton.chr`) com anexos de pele: `body`, `skin`, `legs`, `head`, `hair`, `pack` (cada um um `.chr`).
+- Pacote `Look` (protocolo v16), dos dois lados a cada 2 s: `base=<esqueleto>;anexo=<arquivo.chr>;...`. Quem recebe recria o fantoche só com o esqueleto e prende as partes com a função do próprio jogo que monta os zumbis (`0x0131BCC0`, cdecl `(ICharacterInstance*, nome, arquivo, clonarMaterial)`).
+- **Não tirar partes de um personagem em uso**: a primeira versão removia os anexos do fantoche com `DestroyAttachment` e prendia os novos; o host fechou na hora (acesso a nulo em `0x00B2D805`, numa thread de animação; dump `USER/StateOfDecay_LUASPC_2026-11-02_20-18-09.dmp`, log `sodcoop_host_crash_look.log`). Agora uma aparência nova recria o fantoche do zero.
+- Teste: os dois fantoches montados com as 6 partes reais, sem falha; `fm_nextMember` no client → o host recriou o fantoche com a nova aparência em < 1 s. Confirmado pelo usuário por imagem (boné, camiseta, mochila e jeans iguais nas duas janelas).
+
+Limitações da etapa 3:
+- **Cores**: o jogo aplica um tom por cima de cada parte (material); o fantoche fica com as cores padrão (ex.: camiseta clara no host, vinho no client).
+- Não testado com sobrevivente mulher (outro esqueleto) nem com o client trocando de sobrevivente pelo menu do jogo.
+- A troca é manual (`fm_nextMember` pelo `sodcoop_cmd.lua`); o NPC do sobrevivente do client continua existindo na comunidade do host.
