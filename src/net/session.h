@@ -40,6 +40,7 @@ struct PlayerState {
     bool aiming = false;
     float aimOffset[3] = {};  // alvo da mira relativo à posição
     char aimPose[48] = {};    // ver StatePacket.aimPose
+    bool dead = false;        // vida 0
 };
 
 struct RemoteState {

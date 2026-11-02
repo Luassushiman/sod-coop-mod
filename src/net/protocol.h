@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 12;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi)
+inline constexpr uint16_t kProtocolVersion = 13;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -63,6 +63,7 @@ struct StatePacket {
     uint8_t aiming;                // IK de mira ligado (arma levantada)
     float aimOffset[3];            // alvo da mira - posição do jogador (m), dá direção e inclinação
     char aimPose[kActionNameSize]; // animação de aim poses da arma (ex.: AimPoses_shotgun)
+    uint8_t dead;                  // jogador morto (vida 0): os zumbis do host o soltam
 };
 inline constexpr int kZombieAnimSize = 32;
 inline constexpr int kZombieModelSize = 64;

@@ -192,6 +192,19 @@ void runCommandFile(DWORD now) {
     }
 }
 
+// Jogador local morto (IActor::GetHealth <= 0). Registra a mudança no log.
+bool localDead(engine::EntityId id) {
+    static bool last = false;
+    void* actor = engine::getActor(frame::gameFramework(), id);
+    if (!actor) return last;
+    using GetHealth_t = float(__thiscall*)(void*);
+    void* const* vt = *reinterpret_cast<void* const* const*>(actor);
+    const bool dead = reinterpret_cast<GetHealth_t>(vt[engine::vt::kActor_GetHealth / 4])(actor) <= 0.0f;
+    if (dead != last) log::info("jogador local %s", dead ? "MORREU" : "vivo de novo");
+    last = dead;
+    return dead;
+}
+
 // Cliente: golpes (ação da camada 0 de arma branca) e tiros (camada 1 "Gun_shoot*")
 // do jogador local viram dano nos zumbis do host.
 bool isMeleeAnim(const char* name) {
@@ -319,6 +332,7 @@ void onFrame() {
         memcpy(mine.upper, anim_watch::currentUpper().name, sizeof(mine.upper));
         mine.upperSeq = anim_watch::currentUpper().seq;
         memcpy(mine.aimPose, anim_watch::currentAimPose().name, sizeof(mine.aimPose));
+        mine.dead = settled && localDead(id);
         // IK de mira do jogador (o nome da animação não indica a mira: o jogo
         // liga o IK por cima de _AIM_* e também de relaxed_idle_*).
         bool aimOn = false;
@@ -363,7 +377,9 @@ void onFrame() {
     // Zumbis: o host manda os dele; o cliente desliga os próprios e mostra os do host.
     if (g_cfg.net.role == net::Role::Host) {
         const engine::Vec3 other{remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]};
-        zombies::updateHost(g_cfg.zombies, settled, s.pos, remote.connected && remote.state.hasPlayer, other);
+        // Jogador do cliente morto: os zumbis conduzidos pelo mod o soltam.
+        zombies::updateHost(g_cfg.zombies, settled, s.pos,
+                            remote.connected && remote.state.hasPlayer && !remote.state.dead, other);
     } else {
         zombies::updateClient(g_cfg.zombies, settled, s.pos);
         detectLocalAttacks(settled, s, mine);

@@ -119,16 +119,20 @@ function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
   end
   return table.concat(hits, " ")
 end
--- Cliente: golpe de zumbi do host no jogador local. Por enquanto a vida para em 1:
--- a morte do jogador causada pelo mod ainda não foi validada.
+-- Cliente: golpe de zumbi do host no jogador local. Se zerar a vida, mata pelo
+-- caminho normal do jogo (Kill: queda e tela de morte, como na morte comum).
 function SodCoop.PlayerHurt(dmg)
   local a = g_localActor
   if not a or not a.actor then return "sem jogador" end
+  if a:IsDead() then return "ja morto" end
   local h = a.actor:GetHealth()
-  local n = math.max(h - dmg, 1)
-  a.actor:SetHealth(n)
+  if h - dmg <= 0 then
+    a:Kill(true, NULL_ENTITY, NULL_ENTITY, false, false)
+    return string.format("morto (%.0f -> 0)", h)
+  end
+  a.actor:SetHealth(h - dmg)
   if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 0.5, 0.25, 0.1, a:GetWorldPos()) end
-  return string.format("vida %.0f -> %.0f", h, n)
+  return string.format("vida %.0f -> %.0f", h, h - dmg)
 end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]

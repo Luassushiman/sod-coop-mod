@@ -90,6 +90,7 @@ void sendState() {
     memcpy(p.aimOffset, g_local.aimOffset, sizeof(p.aimOffset));
     memcpy(p.aimPose, g_local.aimPose, sizeof(p.aimPose));
     p.aimPose[sizeof(p.aimPose) - 1] = 0;
+    p.dead = g_local.dead ? 1 : 0;
     ReleaseSRWLockShared(&g_lock);
     send(&p, sizeof(p));
 }
@@ -305,6 +306,7 @@ void handlePacket(const char* data, int size, const Address& from) {
         memcpy(g_remote.state.aimOffset, p.aimOffset, sizeof(p.aimOffset));
         memcpy(g_remote.state.aimPose, p.aimPose, sizeof(g_remote.state.aimPose));
         g_remote.state.aimPose[sizeof(g_remote.state.aimPose) - 1] = 0;
+        g_remote.state.dead = p.dead != 0;
         g_remote.receivedAtMs = g_lastRecvMs;
         g_remote.receivedAtSec = clock::seconds();
         g_remote.senderTimeMs = p.timeMs;

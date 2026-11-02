@@ -158,10 +158,30 @@ Como a IA do jogo só persegue o jogador do host, o mod conduz os zumbis perto d
 Teste (duas instâncias, client a ~32 m do host, Feral levado para 9 m do client): o Feral correu até o client e golpeou; a vida caiu 75 → 67 → 59 → … → 1 e o personagem ficou incapacitado (estado do próprio jogo com pouca vida). Corrida e golpe confirmados pelo usuário na tela do client.
 
 Limitações da etapa 2c:
-- A vida do client para em 1 (a morte do jogador pelo mod ainda não foi validada).
+- A vida do client parava em 1 (resolvido na etapa 2d).
 - No host, o zumbi conduzido não mostra o golpe (o jogo recusa animação direta no zumbi): ele aparece parado ao lado do fantoche.
 - Perseguição em linha reta, sem caminho (atravessa obstáculos); sem desvio nem bloqueio do client.
 - Não testado com zumbis longe do host (fora da IA completa, ~15 m), nem com vários zumbis ao mesmo tempo.
 - O Feral usa as animações dos zumbis comuns (pode não ter golpes próprios no fantoche).
 - `actor:SetHealth` no client respeita o teto de vida rebaixado por ferimentos (pedido 75, ficou 35).
 - `Zombie.SpawnZombies` deixou de criar zumbis nos testes; para testar, zumbis existentes são levados até o client.
+
+## Zumbis — etapa 2d: morte do jogador do client (2026-11-02) ✅
+
+- Golpe de zumbi que zera a vida do client mata pelo caminho normal do jogo: `g_localActor:Kill(true, NULL_ENTITY, NULL_ENTITY, false, false)` (`BasicActor:Kill`, `scripts/entities/actor/basicactor.lua`). Golpes num jogador já morto são ignorados.
+- O client manda `State.dead` (vida <= 0, lida por `IActor::GetHealth`; protocolo v13). Com o client morto, o host solta os zumbis conduzidos (`SodCoop.zc = {}`) e para de mandar golpes.
+- Na morte, a vida 0 passa pelo `CActor::SetHealth` base (`0x01509140`): vida <= 0 chama a rotina de morte do ator (vtbl `+0x370`) e avisa o jogo.
+
+Testes (duas instâncias, backup dos saves em `testenv/_save_backups/20261102_185308`):
+- `Kill` direto no jogador do client: vida 0, `IsDead` = true, entidade continua; o usuário confirmou a morte normal na tela.
+- Zumbi comum (ULZombie37) levado a 6 m do client: 35 → 27 → 19 → 12 → 5 → morto; log `jogador local MORREU`; depois disso, nenhum golpe a mais.
+
+Achados:
+- `actor:Revive()` num jogador morto **fechou o jogo** (client sumiu sem log de saída); não usar.
+- Levar um zumbi para longe do host (2 km) não funciona: o `ZombieManager` o traz de volta para perto do host.
+- Logo depois de carregar o save, os zumbis perto do host podem existir só na simulação "lab" (`Zombie.NumZombiesInCircle` conta 31 em 150 m, nenhuma entidade); `Zombie.ActivateInCircle` e `zm_activationDist` maior não criaram entidades. Andar com o host resolveu.
+- Para testar com o client longe do host, dá para teleportar o jogador do client (`g_localActor:SetWorldPos`).
+
+Limitações da etapa 2d:
+- Com o client morto, o host também deixa de listar zumbis perto do corpo dele (só os perto do host).
+- Não há reviver nem troca de personagem sincronizada; depois da morte, o client segue o fluxo normal do jogo sozinho.
