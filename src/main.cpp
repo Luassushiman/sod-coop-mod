@@ -10,6 +10,7 @@
 // Depois disso, tudo acontece em onFrame(), na thread principal do jogo.
 #include <windows.h>
 
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -171,6 +172,70 @@ void runCommandFile(DWORD now) {
     std::string result;
     if (puppet::readLuaText("SodCoop.cmdResult or ''", result) && !result.empty())
         log::info("cmd: resultado: %s", result.c_str());
+    // "ACTOR:<entityId>": registra a vtable do IActor da entidade (engenharia reversa).
+    if (result.compare(0, 6, "ACTOR:") == 0) {
+        const engine::EntityId aid = static_cast<engine::EntityId>(strtoul(result.c_str() + 6, nullptr, 0));
+        void* actor = engine::getActor(frame::gameFramework(), aid);
+        if (!actor) {
+            log::warn("cmd: ator %u nao encontrado", aid);
+            return;
+        }
+        void* const* vt = *reinterpret_cast<void* const* const*>(actor);
+        char line[1024];
+        int n = snprintf(line, sizeof(line), "cmd: ator %u = %p vtable %p:", aid, actor, vt);
+        for (int i = 0; i < 48 && n < (int)sizeof(line) - 16; ++i)
+            n += snprintf(line + n, sizeof(line) - n, " %02X:%p", i * 4, vt[i]);
+        log::info("%s", line);
+        using GetHealth_t = float(__thiscall*)(void*);
+        log::info("cmd: ator %u GetHealth()=%.1f", aid,
+                  reinterpret_cast<GetHealth_t>(vt[engine::vt::kActor_GetHealth / 4])(actor));
+    }
+}
+
+// Cliente: golpes (ação da camada 0 de arma branca) e tiros (camada 1 "Gun_shoot*")
+// do jogador local viram dano nos zumbis do host.
+bool isMeleeAnim(const char* name) {
+    std::string l = name;
+    for (char& c : l) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    if (l.find("grab") != std::string::npos) return false;
+    for (const char* k : {"bluntlight", "bluntheavy", "edgedlight", "edgedheavy", "knife_", "strike_", "unarmed_",
+                          "heromelee"})
+        if (l.compare(0, strlen(k), k) == 0) return true;
+    return false;
+}
+
+bool isShotAnim(const char* name) {
+    return strncmp(name, "Gun_shoot", 9) == 0 || strncmp(name, "Shoot_", 6) == 0;
+}
+
+void detectLocalAttacks(bool settled, const local_player::Snapshot& s, const net::PlayerState& mine) {
+    static uint16_t lastAction = 0, lastUpper = 0;
+    static bool primed = false;
+    const anim_watch::Action& action = anim_watch::currentAction();
+    const anim_watch::Action& upper = anim_watch::currentUpper();
+    if (!settled) {
+        primed = false;
+        return;
+    }
+    if (!primed) {  // não conta o que já estava tocando ao entrar no mundo
+        primed = true;
+        lastAction = action.seq;
+        lastUpper = upper.seq;
+        return;
+    }
+    if (action.seq != lastAction) {
+        lastAction = action.seq;
+        if (isMeleeAnim(action.name))
+            zombies::onLocalAttack(g_cfg.zombies, zombies::AttackKind::Melee, s.pos, s.angles.z, {});
+    }
+    if (upper.seq != lastUpper) {
+        lastUpper = upper.seq;
+        if (isShotAnim(upper.name)) {
+            // Direção da mira: alvo do IK de mira (relativo à posição) menos a altura do peito.
+            const engine::Vec3 dir{mine.aimOffset[0], mine.aimOffset[1], mine.aimOffset[2] - 1.4f};
+            zombies::onLocalAttack(g_cfg.zombies, zombies::AttackKind::Shot, s.pos, s.angles.z, dir);
+        }
+    }
 }
 
 // Thread principal do jogo, uma vez por frame.
@@ -301,6 +366,7 @@ void onFrame() {
         zombies::updateHost(g_cfg.zombies, settled, s.pos, remote.connected && remote.state.hasPlayer, other);
     } else {
         zombies::updateClient(g_cfg.zombies, settled, s.pos);
+        detectLocalAttacks(settled, s, mine);
     }
 }
 

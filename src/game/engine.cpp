@@ -155,6 +155,16 @@ bool getAimIK(void* entity, bool& enabled, Vec3& target, float& weight) {
     return true;
 }
 
+void* getActor(void* gameFramework, EntityId id) {
+    if (!looksLikeObject(gameFramework)) return nullptr;
+    using GetAS_t = void*(__thiscall*)(void*);
+    void* as = vfunc<GetAS_t>(gameFramework, vt::kGameFramework_GetIActorSystem)(gameFramework);
+    if (!looksLikeObject(as)) return nullptr;
+    using GetActor_t = void*(__thiscall*)(void*, EntityId);
+    void* actor = vfunc<GetActor_t>(as, vt::kActorSystem_GetActor)(as, id);
+    return looksLikeObject(actor) ? actor : nullptr;
+}
+
 const char* getEntityName(void* entity) {
     if (!looksLikeObject(entity)) return "";
     using Fn = const char*(__thiscall*)(void*);

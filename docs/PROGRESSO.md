@@ -112,3 +112,17 @@ Limitações da etapa 1:
 - Os saves do host e do client são diferentes (ex.: o client já tem base); o client ainda não usa o mundo do host.
 - `zm_spawn` (cvar inteira) não criou zumbis nos testes; para testar usamos zumbis existentes e teletransporte (`SetWorldPos` no ator, via `sodcoop_cmd.lua`).
 - `zm_playerInvisible 1` não impediu um Feral de atacar.
+
+## Zumbis — etapa 2a: dano do client nos zumbis do host (2026-11-02) ✅
+
+- O client detecta o próprio golpe (ação da camada 0 de arma branca: `BluntLight_*`, `Strike_*`, `EdgedLight_*`...) ou tiro (`Gun_shoot*`, `Shoot_*` na camada 1) e escolhe o fantoche atingido: golpe = mais próximo na frente, até 2,8 m (±70°); tiro = mais perto da linha da mira (até 60 m, 1 m de tolerância).
+- Pacote `Hit` (client → host, 3 cópias, com sequência para descartar repetidos).
+- O host aplica o dano: `actor:SetHealth(vida - dano)`; se zerar, `entidade:Kill(true, ...)` (morte normal do jogo, com animação e corpo). `[zombies] melee_damage=35`, `shot_damage=60`.
+- Teste: 3 golpes do client numa zumbi comum → 100 → 65 → 30 → morta; golpes extras ignorados ("já morto"); a queda apareceu nas duas janelas (confirmado pelo usuário).
+
+Limitações da etapa 2a:
+- O alvo é escolhido pela posição do fantoche no client (sem colisão física); dano fixo por tipo de ataque, sem tiro na cabeça nem diferença entre armas.
+- Sem reação ao golpe (cambalear) antes da morte; `NotifyHitReaction` existe na entidade e ainda não foi usado.
+- Tiro sem mira (pelo quadril) usa o último alvo do IK de mira.
+- Zumbis ainda não atacam o client.
+- Um zumbi local do client (`ULZombie1`, provavelmente de missão/cena) reaparece mesmo com `zm_killAll`.

@@ -19,11 +19,20 @@ struct Config {
     // Modelo dos fantoches (modelo completo simplificado "EigenZombie" do jogo).
     std::string model = "characters/male/zombie/body/tshirt_jeans/low/low.cdf";
     std::string rootBone = "Bip01 Pelvis";
+    float meleeDamage = 35.0f;  // por golpe do cliente (Grunt tem 100 de vida)
+    float shotDamage = 60.0f;   // por tiro do cliente
 };
+
+enum class AttackKind { Melee = 0, Shot = 1 };
 
 // inWorld: jogador local no mundo. other: posição do outro jogador (se válida).
 void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool otherValid,
                 const engine::Vec3& other);
 void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self);
+
+// Cliente: o jogador local deu um golpe/tiro. Escolhe o fantoche de zumbi atingido
+// e manda o dano ao host. yaw = direção do corpo; aimDir = direção da mira (tiro).
+void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,
+                   const engine::Vec3& aimDir);
 
 }  // namespace sodcoop::zombies

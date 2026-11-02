@@ -44,6 +44,20 @@ function SodCoop.ListZombies(x1, y1, z1, x2, y2, z2, r)
   end
   return table.concat(out, " ")
 end
+-- Host: dano de um golpe do cliente no zumbi "ULZombie<id>". Mata pelo caminho
+-- normal do jogo (Kill: animação de morte e corpo); só SetHealth(0) apagaria o zumbi.
+function SodCoop.ZDamage(id, dmg)
+  local z = System.GetEntityByName("ULZombie" .. id)
+  if not z or not z.actor then return "sem zumbi" end
+  if z:IsDead() then return "ja morto" end
+  local h = z.actor:GetHealth()
+  if h - dmg <= 0 then
+    z:Kill(true, g_localActorId, NULL_ENTITY, false, false)
+    return string.format("morto (%.0f -> 0)", h)
+  end
+  z.actor:SetHealth(h - dmg)
+  return string.format("vida %.0f -> %.0f", h, h - dmg)
+end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
   return e ~= nil and System.GetEntity(e.id) ~= nil
@@ -157,6 +171,7 @@ size_t g_lastHostCount = static_cast<size_t>(-1);
 // --- Cliente ---------------------------------------------------------------
 struct Puppet {
     std::string anim;
+    engine::Vec3 pos{};  // posição desenhada no último frame
 };
 std::map<uint16_t, Puppet> g_puppets;
 bool g_clientWorld = false;  // já desligou os zumbis locais neste mundo
@@ -172,9 +187,17 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         net::setLocalZombies({});
         return;
     }
+    if (!ensureHelpers()) return;
+    for (const net::HitEvent& hit : net::takeHits()) {
+        char expr[96];
+        snprintf(expr, sizeof(expr), "SodCoop.ZDamage(%u, %.1f)", hit.zombieId, hit.damage);
+        std::string result;
+        puppet::readLuaText(expr, result);
+        log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: %s", hit.kind ? "tiro" : "corpo a corpo",
+                  hit.damage, hit.zombieId, result.c_str());
+    }
     if (now < next) return;
     next = now + kHostInterval;
-    if (!ensureHelpers()) return;
 
     const engine::Vec3 o = otherValid ? other : self;
     char expr[256];
@@ -299,6 +322,7 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
             engine::executeLua(buf, "sodcoop_zanim");
             it->second.anim = b.anim;
         }
+        it->second.pos = {x, y, z};
         snprintf(buf, sizeof(buf), "%u,%.3f,%.3f,%.3f,%.4f,", id, x, y, z, yaw);
         moves += buf;
     }
@@ -307,6 +331,49 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
     static int moveFailures = 0;
     if (!engine::executeLua(moves.c_str(), "sodcoop_zmove") && ++moveFailures <= 5)
         log::warn("zombies: ZMoveAll falhou");
+}
+
+void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,
+                   const engine::Vec3& aimDir) {
+    if (!cfg.enabled || g_puppets.empty()) return;
+    constexpr float kMeleeRange = 2.8f;     // m, horizontal
+    constexpr float kMeleeCos = 0.34f;      // ~70 graus para cada lado
+    constexpr float kShotRange = 60.0f;     // m
+    constexpr float kShotRadius = 1.0f;     // m da linha da mira ao centro do zumbi
+    constexpr float kChest = 1.4f, kZombieCenter = 1.0f;
+    const float fx = -std::sin(yaw), fy = std::cos(yaw);
+    float dl = std::sqrt(aimDir.x * aimDir.x + aimDir.y * aimDir.y + aimDir.z * aimDir.z);
+    const engine::Vec3 d = dl > 0.01f ? engine::Vec3{aimDir.x / dl, aimDir.y / dl, aimDir.z / dl}
+                                      : engine::Vec3{fx, fy, 0};
+    uint16_t best = 0;
+    float bestScore = 1e9f;
+    for (const auto& [id, p] : g_puppets) {
+        if (kind == AttackKind::Melee) {
+            const float dx = p.pos.x - self.x, dy = p.pos.y - self.y;
+            const float dist = std::sqrt(dx * dx + dy * dy);
+            if (dist > kMeleeRange || std::fabs(p.pos.z - self.z) > 1.5f) continue;
+            if (dist > 0.3f && (dx * fx + dy * fy) / dist < kMeleeCos) continue;
+            if (dist < bestScore) bestScore = dist, best = id;
+        } else {
+            const float ox = p.pos.x - self.x, oy = p.pos.y - self.y, oz = p.pos.z + kZombieCenter - (self.z + kChest);
+            const float t = ox * d.x + oy * d.y + oz * d.z;
+            if (t <= 0 || t > kShotRange) continue;
+            const float px = ox - d.x * t, py = oy - d.y * t, pz = oz - d.z * t;
+            if (px * px + py * py + pz * pz > kShotRadius * kShotRadius) continue;
+            if (t < bestScore) bestScore = t, best = id;
+        }
+    }
+    if (bestScore >= 1e9f) {
+        log::info("zombies: %s do cliente nao acertou nenhum zumbi", kind == AttackKind::Melee ? "golpe" : "tiro");
+        return;
+    }
+    net::HitEvent hit;
+    hit.zombieId = best;
+    hit.kind = static_cast<uint8_t>(kind);
+    hit.damage = kind == AttackKind::Melee ? cfg.meleeDamage : cfg.shotDamage;
+    net::sendHit(hit);
+    log::info("zombies: %s do cliente acertou o zumbi %u (%.1f m); enviando %.0f de dano",
+              kind == AttackKind::Melee ? "golpe" : "tiro", best, bestScore, hit.damage);
 }
 
 }  // namespace sodcoop::zombies

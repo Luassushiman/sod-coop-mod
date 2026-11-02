@@ -59,6 +59,10 @@ inline constexpr size_t kStatObj_GetFilePath = 0xA0;          // const char* () 
 inline constexpr size_t kEntity_GetCharacter = 0x144;            // ICharacterInstance* (int slot)
 inline constexpr size_t kCharacter_GetISkeletonAnim = 0x10;      // ISkeletonAnim* ()
 inline constexpr size_t kCharacter_GetISkeletonPose = 0x14;      // ISkeletonPose* () — bind GetSlotHelperPos
+inline constexpr size_t kGameFramework_GetIActorSystem = 0x64;  // IActorSystem* () — bind Actor:SetHealth 0x015435D0
+inline constexpr size_t kActorSystem_GetActor = 0x0C;            // IActor* (EntityId)
+inline constexpr size_t kActor_SetHealth = 0x5C;                 // void (float) — NÃO chamar em zumbi (fechou o jogo)
+inline constexpr size_t kActor_GetHealth = 0x60;                 // float ()
 inline constexpr size_t kEntity_SetWorldTM = 0x54;       // void (const Matrix34&, int flags)
 inline constexpr size_t kEntity_GetWorldTM = 0x5C;       // const Matrix34& ()
 inline constexpr size_t kEntity_GetWorldAngles = 0x8C;   // Ang3 () — retorno por ponteiro oculto
@@ -94,6 +98,8 @@ void* findEntityByName(const char* name);
 bool setAnimationDrivenMotion(void* entity, bool enabled);
 // Lê o estado do IK de mira (sem criar o modificador). false se não existe ainda.
 bool getAimIK(void* entity, bool& enabled, Vec3& target, float& weight);
+// IActor* da entidade via IGameFramework::GetIActorSystem()->GetActor(id).
+void* getActor(void* gameFramework, EntityId id);
 bool getWorldTM(void* entity, Matrix34& out);
 // Nome atual da entidade ("" se inválida).
 const char* getEntityName(void* entity);

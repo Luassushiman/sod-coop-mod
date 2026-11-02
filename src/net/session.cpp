@@ -30,6 +30,11 @@ std::vector<ZombieState> g_localZombies;            // host; protegido por g_loc
 std::map<uint16_t, RemoteZombie> g_remoteZombies;   // cliente; protegido por g_lock
 constexpr double kZombieSendInterval = 0.1;          // s
 constexpr double kZombieExpire = 1.5;                // s sem atualização = removido
+std::vector<HitEvent> g_outHits;   // cliente: a enviar; protegido por g_lock
+std::vector<HitEvent> g_inHits;    // host: recebidos; protegido por g_lock
+uint16_t g_hitSeq = 0;             // cliente (thread de rede)
+uint16_t g_lastHitSeq = 0;         // host (thread de rede)
+bool g_haveHitSeq = false;
 volatile bool g_running = false;
 HANDLE g_thread = nullptr;
 
@@ -152,6 +157,39 @@ void handleZombies(const char* data, int size) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void sendHits() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<HitEvent> out;
+    out.swap(g_outHits);
+    ReleaseSRWLockExclusive(&g_lock);
+    for (const HitEvent& e : out) {
+        HitPacket p = {};
+        p.hitSeq = ++g_hitSeq;
+        p.zombieId = e.zombieId;
+        p.kind = e.kind;
+        p.damage = e.damage;
+        for (int i = 0; i < 3; ++i) {  // UDP sem confirmação: cópias reduzem a chance de perda
+            fillHeader(p.h, PacketType::Hit);
+            send(&p, sizeof(p));
+        }
+    }
+}
+
+void handleHit(const char* data) {
+    HitPacket p;
+    memcpy(&p, data, sizeof(p));
+    if (g_haveHitSeq && static_cast<int16_t>(p.hitSeq - g_lastHitSeq) <= 0) return;  // repetido
+    g_haveHitSeq = true;
+    g_lastHitSeq = p.hitSeq;
+    HitEvent e;
+    e.zombieId = p.zombieId;
+    e.kind = p.kind;
+    e.damage = p.damage;
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_inHits.size() < 64) g_inHits.push_back(e);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void setConnected(bool connected, uint32_t peerId) {
     AcquireSRWLockExclusive(&g_lock);
     g_remote.connected = connected;
@@ -238,6 +276,10 @@ void handlePacket(const char* data, int size, const Address& from) {
         handleZombies(data, size);
         return;
     }
+    if (h.type == PacketType::Hit && g_cfg.role == Role::Host && size >= (int)sizeof(HitPacket)) {
+        handleHit(data);
+        return;
+    }
     if (h.type == PacketType::State && size >= (int)sizeof(StatePacket)) {
         if (h.seq <= g_lastPeerSeq) return;  // atrasado ou duplicado
         g_lastPeerSeq = h.seq;
@@ -296,6 +338,7 @@ DWORD WINAPI netThread(LPVOID) {
             sendState();
             nextSend = (nowSec - nextSend > sendInterval) ? nowSec + sendInterval : nextSend + sendInterval;
         }
+        if (g_cfg.role == Role::Client && g_peerKnown) sendHits();
         static double nextZombies = 0;
         if (g_cfg.role == Role::Host && g_peerKnown && nowSec >= nextZombies) {
             sendZombies();
@@ -375,6 +418,20 @@ void setLocalZombies(const std::vector<ZombieState>& zombies) {
     AcquireSRWLockExclusive(&g_lock);
     g_localZombies = zombies;
     ReleaseSRWLockExclusive(&g_lock);
+}
+
+void sendHit(const HitEvent& hit) {
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_outHits.size() < 64) g_outHits.push_back(hit);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+std::vector<HitEvent> takeHits() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<HitEvent> in;
+    in.swap(g_inHits);
+    ReleaseSRWLockExclusive(&g_lock);
+    return in;
 }
 
 std::map<uint16_t, RemoteZombie> getRemoteZombies() {

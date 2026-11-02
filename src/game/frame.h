@@ -20,4 +20,7 @@ bool installHook();
 // Se true, o PreUpdate sempre recebe haveFocus=true (o jogo não "percebe" a perda de foco).
 void setForceFocus(bool force);
 
+// CCryAction (IGameFramework) visto no último PostUpdate; nullptr antes do primeiro.
+void* gameFramework();
+
 }  // namespace sodcoop::frame

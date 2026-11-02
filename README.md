@@ -31,12 +31,13 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 - [x] Golpes, pulos e quedas do outro jogador aparecem no personagem dele (ainda sem dano)
 - [x] A arma que o outro jogador está usando aparece na mão dele
 - [x] Mira, tiro e recarga do outro jogador aparecem no personagem dele
-- [x] Zumbis do host aparecem no mundo do cliente (só visual, ainda sem ataque/dano)
+- [x] Zumbis do host aparecem no mundo do cliente
+- [x] Golpes e tiros do cliente ferem e matam os zumbis do host
 
 ## 🛠️ Próximos passos
 
 - [ ] Dano dos golpes
-- [ ] Zumbis: ataques e dano (host como autoridade)
+- [ ] Zumbis atacando o jogador do cliente
 - [ ] Cliente usando o mesmo mundo/save do host
 - [ ] Inventário e itens
 - [ ] Veículos

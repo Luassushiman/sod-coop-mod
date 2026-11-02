@@ -27,7 +27,10 @@ bool __fastcall preUpdateDetour(void* self, void* /*edx*/, bool haveFocus, unsig
     return g_preOriginal(self, g_forceFocus ? true : haveFocus, flags);
 }
 
+void* g_framework = nullptr;
+
 void __fastcall postUpdateDetour(void* self, void* /*edx*/, bool haveFocus, unsigned int flags) {
+    g_framework = self;
     if (!g_loggedFirstFrame) {
         g_loggedFirstFrame = true;
         log::info("frame: primeiro PostUpdate (this=%p)", self);
@@ -69,5 +72,7 @@ bool installHook() {
            hook(engine::kActionPostUpdate, reinterpret_cast<void*>(&postUpdateDetour),
                 reinterpret_cast<void**>(&g_postOriginal), "CCryAction::PostUpdate");
 }
+
+void* gameFramework() { return g_framework; }
 
 }  // namespace sodcoop::frame
