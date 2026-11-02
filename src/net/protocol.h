@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 11;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit
+inline constexpr uint16_t kProtocolVersion = 12;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi)
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -18,7 +18,8 @@ enum class PacketType : uint8_t {
     State = 4,    // ambos: estado do jogador local (também serve de keep-alive)
     Bye = 5,      // ambos: saída limpa
     Zombies = 6,  // host -> cliente: zumbis perto dos jogadores (vários pacotes por rodada)
-    Hit = 7,      // cliente -> host: golpe/tiro do cliente acertou um zumbi (enviado 3x)
+    Hit = 7,      // golpe (enviado 3x). cliente -> host: o cliente acertou um zumbi;
+                  // host -> cliente: um zumbi acertou o jogador do cliente
 };
 
 #pragma pack(push, 1)
@@ -84,9 +85,9 @@ struct ZombiesPacket {
 };
 struct HitPacket {
     Header h;
-    uint16_t hitSeq;    // por cliente; o host descarta repetidos
-    uint16_t zombieId;  // ZombieEntry.id
-    uint8_t kind;       // 0 = corpo a corpo, 1 = tiro
+    uint16_t hitSeq;    // por remetente; o outro lado descarta repetidos
+    uint16_t zombieId;  // ZombieEntry.id (alvo ou atacante)
+    uint8_t kind;       // 0 = corpo a corpo, 1 = tiro (cliente -> host); 2 = ataque de zumbi (host -> cliente)
     float damage;
 };
 #pragma pack(pop)

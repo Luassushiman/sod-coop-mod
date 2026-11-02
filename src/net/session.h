@@ -68,10 +68,10 @@ struct RemoteZombie {
     double curAtSec = 0, prevAtSec = 0;  // clock::seconds() local da chegada
 };
 
-// Golpe do cliente num zumbi do host.
+// Golpe do cliente num zumbi do host, ou de um zumbi do host no jogador do cliente.
 struct HitEvent {
     uint16_t zombieId = 0;
-    uint8_t kind = 0;  // 0 = corpo a corpo, 1 = tiro
+    uint8_t kind = 0;  // 0 = corpo a corpo, 1 = tiro (do cliente); 2 = ataque de zumbi (do host)
     float damage = 0;
 };
 
@@ -87,9 +87,9 @@ void setLocalZombies(const std::vector<ZombieState>& zombies);
 // depois de 1,5 s.
 std::map<uint16_t, RemoteZombie> getRemoteZombies();
 
-// Cliente: envia um golpe ao host (3 cópias; o host descarta as repetidas).
+// Envia um golpe ao outro lado (3 cópias; quem recebe descarta as repetidas).
 void sendHit(const HitEvent& hit);
-// Host: golpes recebidos desde a última chamada.
+// Golpes recebidos desde a última chamada.
 std::vector<HitEvent> takeHits();
 
 }  // namespace sodcoop::net

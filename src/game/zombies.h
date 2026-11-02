@@ -1,9 +1,12 @@
-// Zumbis compartilhados, etapa 1 (só visual): o host é a autoridade.
+// Zumbis compartilhados: o host é a autoridade.
 //
 // Host: a cada 0,1 s lista os zumbis do jogo ("ULZombie<n>") perto dos dois
 // jogadores e envia posição, direção e animação (net::setLocalZombies).
 // Cliente: desliga os zumbis próprios (zm_disable 1 + zm_killAll) e mostra um
 // fantoche (AnimObject) para cada zumbi recebido do host.
+// Golpes do cliente vão ao host (pacote Hit). A IA do jogo só persegue o jogador do
+// host; os zumbis perto do cliente são conduzidos pelo mod no host (ZChase), e os
+// golpes deles vão ao cliente, que tira a vida do próprio jogador.
 // Tudo na thread principal do jogo.
 #pragma once
 
@@ -21,6 +24,10 @@ struct Config {
     std::string rootBone = "Bip01 Pelvis";
     float meleeDamage = 35.0f;  // por golpe do cliente (Grunt tem 100 de vida)
     float shotDamage = 60.0f;   // por tiro do cliente
+    // Perseguição do jogador do cliente (a IA do jogo só persegue o jogador do host).
+    bool chase = true;
+    float aggroRadius = 10.0f;   // m do cliente para o mod assumir o zumbi
+    float attackDamage = 8.0f;   // por golpe de zumbi no jogador do cliente
 };
 
 enum class AttackKind { Melee = 0, Shot = 1 };

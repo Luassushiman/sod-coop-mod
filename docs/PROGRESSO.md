@@ -126,3 +126,42 @@ Limitações da etapa 2a:
 - Tiro sem mira (pelo quadril) usa o último alvo do IK de mira.
 - Zumbis ainda não atacam o client.
 - Um zumbi local do client (`ULZombie1`, provavelmente de missão/cena) reaparece mesmo com `zm_killAll`.
+
+## Zumbis — etapa 2b: ataques ao client (investigação, 2026-11-02)
+
+A IA do jogo não serve para isso (ver o fim da seção); a solução está na etapa 2c. O que foi testado no host (via `sodcoop_cmd.lua`):
+
+| Tentativa | Resultado |
+|---|---|
+| ProtoAlly criado pelo Lua como "corpo" do client | criado (250 de vida), mas ignorado pelos zumbis |
+| NPC da comunidade `ULNPC00` (um dos 12 no mapa) levado até um zumbi | inativo (entidade guardada); ignorado |
+| Iscas `Zombie.CreateDrawAggro` / `AggroInCircle` / `ActivateInCircle` | só afetam zumbis "lab" (simulação); o ativo não se moveu |
+| `actor:SetEntitySlot(1, alvo)` + `StateMachine=false` + `Pathfinding_AI=true` (árvore `ZombieAttacker`) | variáveis mudam, o zumbi não se move |
+| Goal pipe próprio (`+ul_locateentity` + `+stick`) com `SelectPipe`, inclusive com `zm_activationDist 60` | `SelectPipe` devolve true, o zumbi não se move |
+
+Achados úteis: a percepção (`DeterminePerception`, `0x01321D20`) é calculada só para o ator local; o Cry AI vale só a menos de `zm_activationDist` (15 m) do jogador do host (ajustável com `zm_tuneActivationDist 1`); `Zombie.SpawnZombies(pos, n)` cria zumbis (útil para testes). Movimento nativo (descompilação de `UpdateLiveZombies` `0x01346070`, `TryPathZombieTo` `0x0133F930`, `SetZombieObjective` `0x0133D4CB`, `DetermineBehaviors` `0x01321BD0`, `ProcessStateMachineBehavior` `0x0138A220`):
+- O `ZombieManager` é orientado a dados: arrays globais por zumbi (posição em `0x01DF2F80`, passo 12; flags em `0x01DF4B80`), 0x18 vagas de zumbi "vivo" em `manager+0x4AE0` e comportamentos por tabela de funções. A posição do jogador vem sempre de `GetClientActor` (o jogador local).
+- Os slots do ator (`SetEntitySlot` → `0x0138C900` → `FUN_0158E810`, máquina de estados em `ator+0x1100`) só são gravados pelo bind Lua: o gerenciador não usa slot para o alvo.
+- `actor:SetMovementTarget(pos | id)` não move o zumbi; `entity:StartAnimation` no zumbi devolve false.
+- **Funciona:** conduzir o zumbi pelo mod (`SetWorldPos` + `SetWorldAngles` a cada frame): ele vai até o fantoche e fica lá.
+
+## Zumbis — etapa 2c: zumbis do host atacam o client (2026-11-02) ✅
+
+Como a IA do jogo só persegue o jogador do host, o mod conduz os zumbis perto do client (função Lua `SodCoop.ZChase`, a cada frame no host):
+- Assume o zumbi vivo a menos de `[zombies] aggro_radius` (10 m) do jogador do client e mais perto dele do que do host; solta quando o client passa de 16 m ou o host fica 3 m mais perto.
+- Vira para o client e corre (`SetWorldPos`): 3,5 m/s; Feral 6,5; Juggernaut 2,8; Bloater 2,2. A altura acompanha a do client.
+- Para a 1,3 m e golpeia (até 1,6 m) a cada 1,8 s, alternando `ZombieMelee_strike_left_fast`, `_strike_right_fast` e `_attack_close` (nomes lidos da memória do host; os paks são cifrados).
+- A animação escolhida vai no `ZombieEntry.anim` (o fantoche do client mostra a corrida e o golpe).
+- 0,4 s depois do início do golpe, se o client ainda estiver a até 2,2 m, o host manda um `Hit` (kind 2) ao client, que tira `[zombies] attack_damage` (8) da vida do próprio jogador (`actor:SetHealth`) e treme a câmera.
+- `[zombies] chase=0` desliga.
+
+Teste (duas instâncias, client a ~32 m do host, Feral levado para 9 m do client): o Feral correu até o client e golpeou; a vida caiu 75 → 67 → 59 → … → 1 e o personagem ficou incapacitado (estado do próprio jogo com pouca vida). Corrida e golpe confirmados pelo usuário na tela do client.
+
+Limitações da etapa 2c:
+- A vida do client para em 1 (a morte do jogador pelo mod ainda não foi validada).
+- No host, o zumbi conduzido não mostra o golpe (o jogo recusa animação direta no zumbi): ele aparece parado ao lado do fantoche.
+- Perseguição em linha reta, sem caminho (atravessa obstáculos); sem desvio nem bloqueio do client.
+- Não testado com zumbis longe do host (fora da IA completa, ~15 m), nem com vários zumbis ao mesmo tempo.
+- O Feral usa as animações dos zumbis comuns (pode não ter golpes próprios no fantoche).
+- `actor:SetHealth` no client respeita o teto de vida rebaixado por ferimentos (pedido 75, ficou 35).
+- `Zombie.SpawnZombies` deixou de criar zumbis nos testes; para testar, zumbis existentes são levados até o client.

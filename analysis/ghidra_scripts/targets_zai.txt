@@ -1,0 +1,6 @@
+NSZombieManager::ZombieManager::DeterminePerception
+NSZombieManager::ZombieManager::DetermineBehaviors
+NSZombieManager::ZombieManager::UpdateLiveZombies
+NSZombieManager::ZombieManager::ActivateLiveZombie
+NSZombieManager::ZombieManager::SetZombieObjective
+NSZombieManager::ZombieManager::TryPathZombieTo

@@ -1,0 +1,6 @@
+SetEntitySlot
+GetEntitySlot
+ULActor::ProcessStateMachineBehavior
+ULActor::SetEntitySlot
+ZombieAttacker
+Pathfinding_Player

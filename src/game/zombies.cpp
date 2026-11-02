@@ -30,6 +30,9 @@ constexpr const char* kLuaHelpers = R"lua(
 SodCoop = SodCoop or {}
 SodCoop.zp = SodCoop.zp or {}
 SodCoop.zBone = SodCoop.zBone or { x = 0, y = 0, z = 0 }
+SodCoop.zc = SodCoop.zc or {}  -- host: zumbis conduzidos pelo mod (nome -> estado)
+SodCoop.zStrikes = { "ZombieMelee_strike_left_fast", "ZombieMelee_strike_right_fast", "ZombieMelee_attack_close" }
+SodCoop.zSpeed = { Feral = 6.5, Juggernaut = 2.8, Bloater = 2.2 }  -- m/s; os outros 3,5
 -- Host: nomes dos zumbis do jogo perto de dois pontos, separados por espaço.
 function SodCoop.ListZombies(x1, y1, z1, x2, y2, z2, r)
   local seen, out = {}, {}
@@ -38,7 +41,9 @@ function SodCoop.ListZombies(x1, y1, z1, x2, y2, z2, r)
       local n = e:GetName()
       if not seen[n] and string.sub(n, 1, 8) == "ULZombie" then
         seen[n] = true
-        out[#out + 1] = n
+        -- "nome=animação" quando o mod conduz o zumbi (ZChase): o cliente mostra essa.
+        local c = SodCoop.zc[n]
+        out[#out + 1] = (c and c.anim) and (n .. "=" .. c.anim) or n
       end
     end
   end
@@ -57,6 +62,73 @@ function SodCoop.ZDamage(id, dmg)
   end
   z.actor:SetHealth(h - dmg)
   return string.format("vida %.0f -> %.0f", h, h - dmg)
+end
+-- Host: a IA do jogo só persegue o jogador local, então o mod conduz os zumbis
+-- vivos que estão a menos de aggro m do jogador do cliente (t) e mais perto dele
+-- do que do host (h): vira para ele, corre (SetWorldPos) e golpeia a cada 1,8 s.
+-- Solta o zumbi quando o cliente se afasta ou o host fica mais perto. Devolve os
+-- ids dos zumbis cujo golpe acertou neste frame (0,4 s depois do início do golpe,
+-- se o cliente ainda estiver a até 2,2 m), separados por espaço.
+function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
+  local t = SodCoop.zTarget or {}
+  t.x, t.y, t.z = tx, ty, tz
+  SodCoop.zTarget = t
+  local hits, seen = {}, {}
+  for _, e in pairs(System.GetEntitiesInSphere(t, aggro + 8) or {}) do
+    local n = e:GetName()
+    if string.sub(n, 1, 8) == "ULZombie" and e.actor and not e:IsDead() and e.actor:GetHealth() > 0 then
+      local p = e:GetWorldPos()
+      local dx, dy = tx - p.x, ty - p.y
+      local dc = math.sqrt(dx * dx + dy * dy)
+      local dh = math.sqrt((hx - p.x) ^ 2 + (hy - p.y) ^ 2)
+      local c = SodCoop.zc[n]
+      if not c and dc < aggro and dc < dh then
+        c = { strikeAt = -100, n = 0, busyUntil = 0 }
+        SodCoop.zc[n] = c
+      elseif c and (dc > aggro + 6 or dh < dc - 3) then
+        SodCoop.zc[n] = nil
+        c = nil
+      end
+      if c then
+        seen[n] = true
+        if dc > 0.01 then e:SetWorldAngles({ x = 0, y = 0, z = math.atan2(-dx, dy) }) end
+        if c.hitAt and now >= c.hitAt then
+          c.hitAt = nil
+          if dc <= 2.2 then hits[#hits + 1] = string.sub(n, 9) end
+        end
+        if now < c.busyUntil then
+          -- golpe em andamento: fica parado
+        elseif dc > 1.6 then  -- para a 1,3 m; golpeia a até 1,6 m
+          local s = math.min(dc - 1.3, (SodCoop.zSpeed[e.class] or 3.5) * dt)
+          e:SetWorldPos({ x = p.x + dx / dc * s, y = p.y + dy / dc * s, z = p.z + (tz - p.z) * math.min(1, dt * 4) })
+          c.anim = "ZombieMelee_run_forward_loop"
+        elseif now - c.strikeAt >= 1.8 then
+          c.strikeAt = now
+          c.n = c.n + 1
+          c.anim = SodCoop.zStrikes[(c.n - 1) % #SodCoop.zStrikes + 1]
+          c.busyUntil = now + 0.9
+          c.hitAt = now + 0.4
+        else
+          c.anim = "Test_wander_idle"
+        end
+      end
+    end
+  end
+  for n, _ in pairs(SodCoop.zc) do
+    if not seen[n] then SodCoop.zc[n] = nil end
+  end
+  return table.concat(hits, " ")
+end
+-- Cliente: golpe de zumbi do host no jogador local. Por enquanto a vida para em 1:
+-- a morte do jogador causada pelo mod ainda não foi validada.
+function SodCoop.PlayerHurt(dmg)
+  local a = g_localActor
+  if not a or not a.actor then return "sem jogador" end
+  local h = a.actor:GetHealth()
+  local n = math.max(h - dmg, 1)
+  a.actor:SetHealth(n)
+  if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 0.5, 0.25, 0.1, a:GetWorldPos()) end
+  return string.format("vida %.0f -> %.0f", h, n)
 end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
@@ -167,6 +239,42 @@ float wrapAngle(float a) {
 
 // --- Host ------------------------------------------------------------------
 size_t g_lastHostCount = static_cast<size_t>(-1);
+bool g_chasing = false;  // SodCoop.zc pode ter zumbis conduzidos
+
+// A cada frame: o mod conduz os zumbis perto do jogador do cliente (SodCoop.ZChase)
+// e manda ao cliente os golpes que acertaram.
+void updateChase(const Config& cfg, double now, const engine::Vec3& self, bool otherValid,
+                 const engine::Vec3& other) {
+    static double last = 0;
+    const double dt = last > 0 ? std::min(now - last, 0.1) : 0.0;
+    last = now;
+    if (!cfg.chase || !otherValid) {
+        if (g_chasing) engine::executeLua("SodCoop.zc = {}", "sodcoop_zchase");
+        g_chasing = false;
+        return;
+    }
+    g_chasing = true;
+    char expr[256];
+    snprintf(expr, sizeof(expr), "SodCoop.ZChase(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.4f, %.3f, %.1f)", other.x,
+             other.y, other.z, self.x, self.y, self.z, dt, now, cfg.aggroRadius);
+    std::string hits;
+    if (!puppet::readLuaText(expr, hits)) {
+        static int failures = 0;
+        if (++failures <= 5) log::warn("zombies: ZChase falhou");
+        return;
+    }
+    for (size_t start = 0; start < hits.size();) {
+        size_t end = hits.find(' ', start);
+        if (end == std::string::npos) end = hits.size();
+        net::HitEvent hit;
+        hit.zombieId = static_cast<uint16_t>(atoi(hits.c_str() + start));
+        hit.kind = 2;
+        hit.damage = cfg.attackDamage;
+        net::sendHit(hit);
+        log::info("zombies: zumbi %u golpeou o jogador do cliente (%.0f de dano)", hit.zombieId, hit.damage);
+        start = end + 1;
+    }
+}
 
 // --- Cliente ---------------------------------------------------------------
 struct Puppet {
@@ -189,6 +297,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
     }
     if (!ensureHelpers()) return;
     for (const net::HitEvent& hit : net::takeHits()) {
+        if (hit.kind > 1) continue;
         char expr[96];
         snprintf(expr, sizeof(expr), "SodCoop.ZDamage(%u, %.1f)", hit.zombieId, hit.damage);
         std::string result;
@@ -196,6 +305,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: %s", hit.kind ? "tiro" : "corpo a corpo",
                   hit.damage, hit.zombieId, result.c_str());
     }
+    updateChase(cfg, now, self, otherValid, other);
     if (now < next) return;
     next = now + kHostInterval;
 
@@ -211,8 +321,14 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
     while (start < names.size()) {
         size_t end = names.find(' ', start);
         if (end == std::string::npos) end = names.size();
-        const std::string name = names.substr(start, end - start);
+        std::string name = names.substr(start, end - start);
         start = end + 1;
+        std::string chaseAnim;  // animação escolhida pelo ZChase, se o mod conduz o zumbi
+        const size_t eq = name.find('=');
+        if (eq != std::string::npos) {
+            chaseAnim = name.substr(eq + 1);
+            name.resize(eq);
+        }
         if (name.size() <= 8) continue;
         void* entity = engine::findEntityByName(name.c_str());
         engine::Matrix34 tm;
@@ -226,7 +342,10 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         z.yaw = angles.z;
         std::string anim;
         bool parametric = false;
-        if (anim_watch::newestLayer0(entity, anim, parametric) && anim[0] != '#') {
+        if (!chaseAnim.empty()) {
+            snprintf(z.anim, sizeof(z.anim), "%s", chaseAnim.c_str());
+            z.loop = looksLooping(chaseAnim, false);
+        } else if (anim_watch::newestLayer0(entity, anim, parametric) && anim[0] != '#') {
             snprintf(z.anim, sizeof(z.anim), "%s", anim.c_str());
             z.loop = looksLooping(anim, parametric);
         }
@@ -256,6 +375,15 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
     }
     if (!cfg.enabled || !ensureHelpers()) return;
     const double now = clock::seconds();
+
+    for (const net::HitEvent& hit : net::takeHits()) {
+        if (hit.kind != 2) continue;
+        char expr[64];
+        snprintf(expr, sizeof(expr), "SodCoop.PlayerHurt(%.1f)", hit.damage);
+        std::string result;
+        puppet::readLuaText(expr, result);
+        log::info("zombies: zumbi %u do host golpeou o jogador (%.0f): %s", hit.zombieId, hit.damage, result.c_str());
+    }
 
     // Zumbis do próprio cliente: desligados ao entrar no mundo; conferidos de tempos em tempos.
     if (!g_clientWorld) {

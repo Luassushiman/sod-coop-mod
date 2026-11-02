@@ -37,7 +37,7 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 ## 🛠️ Próximos passos
 
 - [ ] Dano dos golpes
-- [ ] Zumbis atacando o jogador do cliente
+- [x] Zumbis do host perseguem e golpeiam o jogador do cliente
 - [ ] Cliente usando o mesmo mundo/save do host
 - [ ] Inventário e itens
 - [ ] Veículos
