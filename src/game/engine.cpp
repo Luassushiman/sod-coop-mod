@@ -204,4 +204,32 @@ bool getWorldAngles(void* entity, Vec3& out) {
     return true;
 }
 
+namespace {
+void* timeOfDay() {
+    void* engine3d = gEnvField(genv::k3DEngine);
+    if (!looksLikeObject(engine3d)) return nullptr;
+    void* const* vtable = *reinterpret_cast<void* const* const*>(engine3d);
+    if (!isReadable(vtable, vt::k3DEngine_GetTimeOfDay + sizeof(void*))) return nullptr;
+    using Fn = void*(__thiscall*)(void*);
+    void* tod = vfunc<Fn>(engine3d, vt::k3DEngine_GetTimeOfDay)(engine3d);
+    return looksLikeObject(tod) ? tod : nullptr;
+}
+}  // namespace
+
+bool getTimeOfDay(float& hour) {
+    void* tod = timeOfDay();
+    if (!tod) return false;
+    using Fn = float(__thiscall*)(void*);
+    hour = vfunc<Fn>(tod, vt::kTimeOfDay_GetTime)(tod);
+    return std::isfinite(hour);
+}
+
+bool setTimeOfDay(float hour) {
+    void* tod = timeOfDay();
+    if (!tod || !std::isfinite(hour) || hour < 0.0f || hour > 24.0f) return false;
+    using Fn = void(__thiscall*)(void*, float, bool);
+    vfunc<Fn>(tod, vt::kTimeOfDay_SetTime)(tod, hour, true);
+    return true;
+}
+
 }  // namespace sodcoop::engine

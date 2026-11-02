@@ -41,6 +41,7 @@ struct PlayerState {
     float aimOffset[3] = {};  // alvo da mira relativo à posição
     char aimPose[48] = {};    // ver StatePacket.aimPose
     bool dead = false;        // vida 0
+    float timeOfDay = -1;     // hora do dia (0..24), -1 = desconhecida
 };
 
 struct RemoteState {

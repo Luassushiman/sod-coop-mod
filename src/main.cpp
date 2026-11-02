@@ -223,6 +223,33 @@ void spawnNearHost(bool settled, const engine::Vec3& self, const net::RemoteStat
               h[1], h[2] + 0.5f, ok ? "OK" : "FALHOU");
 }
 
+// Cliente: segue a hora do dia do host. Acerta quando a diferença passa de 0,02 h
+// (~1 min de jogo); registra quantos acertos foram precisos a cada 10 s (se o
+// relógio do jogo desfizer o acerto, o número sobe).
+void followHostTime(bool settled, const net::RemoteState& remote, DWORD now) {
+    static DWORD lastLog = 0;
+    static int sets = 0;
+    static float firstDiff = 0;
+    if (!settled || !remote.connected || !remote.state.hasPlayer) return;
+    const float host = remote.state.timeOfDay;
+    float mine;
+    if (host < 0 || host > 24 || !engine::getTimeOfDay(mine)) return;
+    float diff = host - mine;
+    if (diff > 12) diff -= 24;
+    if (diff < -12) diff += 24;
+    if (std::fabs(diff) > 0.02f && engine::setTimeOfDay(host)) {
+        if (sets == 0) firstDiff = diff;
+        ++sets;
+    }
+    if (now - lastLog >= 10000) {
+        if (sets)
+            log::info("hora: cliente acertado para a do host %d vez(es) em 10 s (host %.3f h; diferenca %.3f h)", sets,
+                      host, firstDiff);
+        lastLog = now;
+        sets = 0;
+    }
+}
+
 // Jogador local morto (IActor::GetHealth <= 0). Registra a mudança no log.
 bool localDead(engine::EntityId id) {
     static bool last = false;
@@ -364,6 +391,8 @@ void onFrame() {
         mine.upperSeq = anim_watch::currentUpper().seq;
         memcpy(mine.aimPose, anim_watch::currentAimPose().name, sizeof(mine.aimPose));
         mine.dead = settled && localDead(id);
+        float hour;
+        if (engine::getTimeOfDay(hour)) mine.timeOfDay = hour;
         // IK de mira do jogador (o nome da animação não indica a mira: o jogo
         // liga o IK por cima de _AIM_* e também de relaxed_idle_*).
         bool aimOn = false;
@@ -413,6 +442,7 @@ void onFrame() {
                             remote.connected && remote.state.hasPlayer && !remote.state.dead, other);
     } else {
         if (g_cfg.spawnNearHost) spawnNearHost(settled, s.pos, remote, now);
+        if (g_cfg.syncTimeOfDay) followHostTime(settled, remote, now);
         zombies::updateClient(g_cfg.zombies, settled, s.pos);
         detectLocalAttacks(settled, s, mine);
     }

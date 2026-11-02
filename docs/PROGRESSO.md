@@ -217,3 +217,11 @@ Limitações da etapa 1:
 - O client carrega o último save **gravado** pelo host, não o estado atual da sessão do host.
 - Os dois jogam com o **mesmo sobrevivente** (mesmo save); no host, o personagem do client aparece como fantoche, mas a comunidade do client tem o mesmo líder.
 - Nada além de jogadores e zumbis é sincronizado: itens, carros, base, comunidade, hora do dia e clima seguem separados em cada cópia.
+
+## Mesmo mundo — etapa 2: hora do dia (2026-11-02) ✅
+
+- O host manda a hora do dia (`State.timeOfDay`, protocolo v15). O client acerta o próprio relógio quando a diferença passa de 0,02 h (~1 min de jogo): `ITimeOfDay::SetTime(hora, true)`. `[net] sync_time_of_day=0` desliga.
+- A cvar `e_TimeOfDay` só **mostra** a hora: `System.SetCVar("e_TimeOfDay", h)` não muda nada (o relógio do jogo segue). `sv_timeofdayenable` = 0 no Breakdown.
+- Acesso: `gEnv+0x24` (I3DEngine) → vtbl `+0x2E0` `GetTimeOfDay()` → `ITimeOfDay` com `SetTime(float, bool)` em `+0x14` e `GetTime()` em `+0x18` (uso do próprio motor em `0x00794620`).
+- Teste: client entrou com 0,98 h de diferença; foi acertado na hora e ficou a ~0,003 h do host (7,217 h × 7,214 h); depois, só um acerto pequeno de vez em quando (o relógio do jogo não desfaz o acerto).
+- Clima: não sincronizado. Não foi achado um sistema de clima no Breakdown (só ajustes gráficos de chuva, `r_Rain*`).

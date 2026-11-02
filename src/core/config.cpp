@@ -55,6 +55,7 @@ Config loadConfig() {
     c.zombies.aggroRadius = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"aggro_radius", 10, ini.c_str()));
     c.zombies.attackDamage = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"attack_damage", 8, ini.c_str()));
     c.spawnNearHost = GetPrivateProfileIntW(L"net", L"spawn_near_host", 1, ini.c_str()) != 0;
+    c.syncTimeOfDay = GetPrivateProfileIntW(L"net", L"sync_time_of_day", 1, ini.c_str()) != 0;
     c.mirrorLocal =GetPrivateProfileIntW(L"puppet", L"mirror_local", 0, ini.c_str()) != 0;
     c.mirrorOffsetX = readFloat(ini, L"puppet", L"mirror_offset_x", c.mirrorOffsetX);
     c.mirrorOffsetY = readFloat(ini, L"puppet", L"mirror_offset_y", c.mirrorOffsetY);

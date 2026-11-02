@@ -1,0 +1,3 @@
+StartTimeOfDay
+e_TimeOfDay
+e_TimeOfDaySpeed

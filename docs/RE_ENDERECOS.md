@@ -175,6 +175,15 @@ Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal
 | Funções Lua da entidade de zumbi | `Kill`, `KillSelf`, `Event_Kill`, `TurnRagdoll`, `NotifyHitReaction`, `IsDead`; no ator: `Kill`, `RagDollize`, `DamageInfo`, `SetHealth`, `GetHealth` | VALIDADO-RUNTIME | listagem pelo `sodcoop_cmd.lua` |
 | Comandos de comunidade | `com_add*` põem no **estoque da comunidade** (handler `com_addGun` `0x013E01C0`, inventário em `+0x244` do registro da comunidade) | CONFIRMADO-ESTÁTICO | textos de ajuda e descompilação |
 
+## 4e. Hora do dia (2026-11-02)
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| `gEnv->p3DEngine` | `gEnv+0x24` | CONFIRMADO-ESTÁTICO | uso em `0x00794620` |
+| `I3DEngine::GetTimeOfDay` | vtbl `+0x2E0` → `ITimeOfDay*` | VALIDADO-RUNTIME | hora lida = `e_TimeOfDay` |
+| `ITimeOfDay::SetTime(float hour, bool forceUpdate)` / `GetTime()` | vtbl `+0x14` / `+0x18` | VALIDADO-RUNTIME | client acertado para a hora do host e mantido |
+| `e_TimeOfDay` | cvar só de leitura na prática: SetCVar não muda o relógio | VALIDADO-RUNTIME | 6,55 pedido, 6,16 lido |
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).

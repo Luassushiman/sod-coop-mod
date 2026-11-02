@@ -42,6 +42,7 @@ inline constexpr unsigned char kSetLocalActorPrologue[] = {0x55, 0x56, 0x57, 0x8
 namespace genv {
 inline constexpr size_t kConsole = 0x1C;
 inline constexpr size_t kScriptSystem = 0x20;
+inline constexpr size_t k3DEngine = 0x24;  // uso em 0x00794620: (*(gEnv+0x24))->vt[0x2E0]() = GetTimeOfDay
 inline constexpr size_t kPhysicalWorld = 0x2C;
 inline constexpr size_t kEntitySystem = 0x38;
 inline constexpr size_t kLog = 0x44;
@@ -63,7 +64,12 @@ inline constexpr size_t kGameFramework_GetIActorSystem = 0x64;  // IActorSystem*
 inline constexpr size_t kActorSystem_GetActor = 0x0C;            // IActor* (EntityId)
 inline constexpr size_t kActor_SetHealth = 0x5C;                 // void (float) — NÃO chamar em zumbi (fechou o jogo)
 inline constexpr size_t kActor_GetHealth = 0x60;                 // float ()
-inline constexpr size_t kEntity_SetWorldTM = 0x54;       // void (const Matrix34&, int flags)
+// Hora do dia (0..24). Em 0x00794620 o motor compara GetTime (+0x18) com a hora
+// forçada e chama SetTime(hora, true) (+0x14).
+inline constexpr size_t k3DEngine_GetTimeOfDay = 0x2E0;  // ITimeOfDay* ()
+inline constexpr size_t kTimeOfDay_SetTime = 0x14;       // void (float hour, bool forceUpdate)
+inline constexpr size_t kTimeOfDay_GetTime = 0x18;       // float ()
+inline constexpr size_t kEntity_SetWorldTM = 0x54;      // void (const Matrix34&, int flags)
 inline constexpr size_t kEntity_GetWorldTM = 0x5C;       // const Matrix34& ()
 inline constexpr size_t kEntity_GetWorldAngles = 0x8C;   // Ang3 () — retorno por ponteiro oculto
 }  // namespace vt
@@ -107,5 +113,9 @@ int getSlotCount(void* entity);
 // Arquivo do modelo estático (.cgf) carregado no slot; "" se não houver.
 const char* getSlotModelPath(void* entity, int slot);
 bool getWorldAngles(void* entity, Vec3& out);
+
+// Hora do dia do motor (ITimeOfDay), em horas 0..24.
+bool getTimeOfDay(float& hour);
+bool setTimeOfDay(float hour);
 
 }  // namespace sodcoop::engine
