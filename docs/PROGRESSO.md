@@ -206,3 +206,14 @@ Achados:
 - Os `EntityId` dos zumbis passam de 16 bits (ex.: 0x0002FCFA, 0x0001FD8A), por isso o tipo da rede mudou.
 - Teste (duas instâncias): espelho e perseguição com os ids novos; dois zumbis (196344 e 196345) golpearam o client em sequência (25 → 17 → 10 → 3 → 1, vida travada em 1 só no teste). A distância mínima entre eles medida foi 1,96 m (ainda chegando); a separação com os dois parados ao lado do client continua sem medida.
 - `Zombie.SpawnZombies` (bind `0x01567F20` → `ZMSpawnZombies` `0x0134E250`, argumentos: origem xyz, destino xyz, quantidade, ?, flags) roda sem erro com várias combinações de argumentos, mas não criou zumbis; causa não investigada.
+
+## Mesmo mundo — etapa 1: mesmo save e nascer ao lado do host (2026-11-02) ✅
+
+- `launch.ps1 -SyncSave`: antes de abrir o client, copia o save do Breakdown (`USER/<steamid>/Sandbox*.ulsave`) do host para o client. O save anterior do client vai para `testenv/_save_backups/<data>_client_antes_sync`. As duas cópias usam a mesma conta Steam (mesma pasta `<steamid>`).
+- `[net] spawn_near_host=1` (padrão): o client, ao entrar no mundo a mais de 30 m do jogador do host, é levado para 2 m ao lado dele (`g_localActor:SetWorldPos`), uma vez por entrada no mundo; desiste se o host não aparecer no primeiro minuto.
+- Teste: client aberto com o save do host, entrou a 80 m dele e foi levado para o lado (log `spawn: cliente a 80 m do host; levado para o lado dele`); confirmado pelo usuário nas duas janelas.
+
+Limitações da etapa 1:
+- O client carrega o último save **gravado** pelo host, não o estado atual da sessão do host.
+- Os dois jogam com o **mesmo sobrevivente** (mesmo save); no host, o personagem do client aparece como fantoche, mas a comunidade do client tem o mesmo líder.
+- Nada além de jogadores e zumbis é sincronizado: itens, carros, base, comunidade, hora do dia e clima seguem separados em cada cópia.

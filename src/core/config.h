@@ -53,6 +53,9 @@ struct Config {
     float mirrorOffsetY = 0.0f;            // mirror_offset_y
     // [net] role=off|host|client, bind, host, port, send_rate_hz, timeout_ms
     net::SessionConfig net;
+    // [net] spawn_near_host=1: o cliente, ao entrar no mundo longe do host (> 30 m),
+    // é levado para o lado do jogador do host (uma vez por entrada no mundo).
+    bool spawnNearHost = true;
     AnimConfig anim;
     // [window] x, y, width, height (width/height 0 = não mexe na janela)
     window_keeper::Rect window;

@@ -192,6 +192,37 @@ void runCommandFile(DWORD now) {
     }
 }
 
+// Cliente: ao entrar no mundo a mais de 30 m do jogador do host, vai para 2 m ao lado
+// dele (uma vez por entrada no mundo). Com o mesmo save (launch.ps1 -SyncSave), os
+// dois ficam no mesmo lugar do mesmo mundo.
+void spawnNearHost(bool settled, const engine::Vec3& self, const net::RemoteState& remote, DWORD now) {
+    static bool done = false;
+    static DWORD settledSince = 0;
+    if (!settled) {
+        done = false;
+        settledSince = 0;
+        return;
+    }
+    if (done) return;
+    if (!settledSince) settledSince = now;
+    if (now - settledSince > 60000) {  // host não apareceu no primeiro minuto: desiste
+        done = true;
+        return;
+    }
+    if (!remote.connected || !remote.state.hasPlayer || remote.state.dead) return;
+    const float* h = remote.state.pos;
+    const float dx = h[0] - self.x, dy = h[1] - self.y;
+    done = true;
+    const float dist = std::sqrt(dx * dx + dy * dy);
+    if (dist <= 30.0f) return;
+    char code[160];
+    snprintf(code, sizeof(code), "g_localActor:SetWorldPos({ x = %.2f, y = %.2f, z = %.2f })", h[0] + 2.0f, h[1],
+             h[2] + 0.5f);
+    const bool ok = engine::executeLua(code, "sodcoop_spawn");
+    log::info("spawn: cliente a %.0f m do host; levado para o lado dele (%.1f, %.1f, %.1f) -> %s", dist, h[0] + 2.0f,
+              h[1], h[2] + 0.5f, ok ? "OK" : "FALHOU");
+}
+
 // Jogador local morto (IActor::GetHealth <= 0). Registra a mudança no log.
 bool localDead(engine::EntityId id) {
     static bool last = false;
@@ -381,6 +412,7 @@ void onFrame() {
         zombies::updateHost(g_cfg.zombies, settled, s.pos,
                             remote.connected && remote.state.hasPlayer && !remote.state.dead, other);
     } else {
+        if (g_cfg.spawnNearHost) spawnNearHost(settled, s.pos, remote, now);
         zombies::updateClient(g_cfg.zombies, settled, s.pos);
         detectLocalAttacks(settled, s, mine);
     }

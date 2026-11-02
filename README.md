@@ -38,7 +38,8 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 
 - [ ] Dano dos golpes
 - [x] Zumbis do host perseguem e golpeiam o jogador do cliente
-- [ ] Cliente usando o mesmo mundo/save do host
+- [x] Cliente carrega o mesmo save do host e nasce ao lado dele
+- [ ] Mundo do host sincronizado ao vivo (itens, carros, base, comunidade, hora)
 - [ ] Inventário e itens
 - [ ] Veículos
 - [ ] Conexão pela internet (Steam), sem precisar abrir portas
