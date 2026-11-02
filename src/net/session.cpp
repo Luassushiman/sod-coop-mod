@@ -27,7 +27,7 @@ SRWLOCK g_lock = SRWLOCK_INIT;
 PlayerState g_local;       // protegido por g_lock
 RemoteState g_remote;      // protegido por g_lock
 std::vector<ZombieState> g_localZombies;            // host; protegido por g_lock
-std::map<uint16_t, RemoteZombie> g_remoteZombies;   // cliente; protegido por g_lock
+std::map<uint32_t, RemoteZombie> g_remoteZombies;   // cliente; protegido por g_lock
 constexpr double kZombieSendInterval = 0.1;          // s
 constexpr double kZombieExpire = 1.5;                // s sem atualização = removido
 std::vector<HitEvent> g_outHits;   // a enviar; protegido por g_lock
@@ -437,12 +437,12 @@ std::vector<HitEvent> takeHits() {
     return in;
 }
 
-std::map<uint16_t, RemoteZombie> getRemoteZombies() {
+std::map<uint32_t, RemoteZombie> getRemoteZombies() {
     const double now = clock::seconds();
     AcquireSRWLockExclusive(&g_lock);
     for (auto it = g_remoteZombies.begin(); it != g_remoteZombies.end();)
         it = now - it->second.curAtSec > kZombieExpire ? g_remoteZombies.erase(it) : std::next(it);
-    std::map<uint16_t, RemoteZombie> copy = g_remoteZombies;
+    std::map<uint32_t, RemoteZombie> copy = g_remoteZombies;
     ReleaseSRWLockExclusive(&g_lock);
     return copy;
 }

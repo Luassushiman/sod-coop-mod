@@ -30,29 +30,44 @@ constexpr const char* kLuaHelpers = R"lua(
 SodCoop = SodCoop or {}
 SodCoop.zp = SodCoop.zp or {}
 SodCoop.zBone = SodCoop.zBone or { x = 0, y = 0, z = 0 }
-SodCoop.zc = SodCoop.zc or {}  -- host: zumbis conduzidos pelo mod (nome -> estado)
+SodCoop.zc = SodCoop.zc or {}  -- host: zumbis conduzidos pelo mod (EntityId -> estado)
+SodCoop.zById = SodCoop.zById or {}  -- host: EntityId -> entidade de zumbi vista
 SodCoop.zStrikes = { "ZombieMelee_strike_left_fast", "ZombieMelee_strike_right_fast", "ZombieMelee_attack_close" }
 SodCoop.zSpeed = { Feral = 6.5, Juggernaut = 2.8, Bloater = 2.2 }  -- m/s; os outros 3,5
--- Host: nomes dos zumbis do jogo perto de dois pontos, separados por espaço.
+-- EntityId numérico: o Lua só tem o handle, que o tostring mostra em hexadecimal
+-- ("userdata: 0002FCFA"). O nome "ULZombie<n>" não serve de id: o jogo repete.
+function SodCoop.EId(e)
+  return tonumber(string.match(tostring(e.id), "(%x+)$"), 16)
+end
+-- Host: zumbis do jogo perto de dois pontos ("EntityId nome", separados por espaço).
 function SodCoop.ListZombies(x1, y1, z1, x2, y2, z2, r)
   local seen, out = {}, {}
   for _, c in ipairs({ { x = x1, y = y1, z = z1 }, { x = x2, y = y2, z = z2 } }) do
     for _, e in pairs(System.GetEntitiesInSphere(c, r) or {}) do
       local n = e:GetName()
-      if not seen[n] and string.sub(n, 1, 8) == "ULZombie" then
-        seen[n] = true
-        -- "nome=animação" quando o mod conduz o zumbi (ZChase): o cliente mostra essa.
-        local c = SodCoop.zc[n]
-        out[#out + 1] = (c and c.anim) and (n .. "=" .. c.anim) or n
+      local id = SodCoop.EId(e)
+      if id and not seen[id] and string.sub(n, 1, 8) == "ULZombie" then
+        seen[id] = true
+        SodCoop.zById[id] = e
+        -- "id=animação" quando o mod conduz o zumbi (ZChase): o cliente mostra essa.
+        local z = SodCoop.zc[id]
+        out[#out + 1] = (z and z.anim) and (id .. "=" .. z.anim) or tostring(id)
       end
     end
   end
   return table.concat(out, " ")
 end
--- Host: dano de um golpe do cliente no zumbi "ULZombie<id>". Mata pelo caminho
--- normal do jogo (Kill: animação de morte e corpo); só SetHealth(0) apagaria o zumbi.
+-- Entidade de zumbi pelo EntityId (nil se já não existe).
+function SodCoop.ZEntity(id)
+  local z = SodCoop.zById[id]
+  if z and System.GetEntity(z.id) then return z end
+  SodCoop.zById[id] = nil
+  return nil
+end
+-- Host: dano de um golpe do cliente no zumbi id. Mata pelo caminho normal do jogo
+-- (Kill: animação de morte e corpo); só SetHealth(0) apagaria o zumbi.
 function SodCoop.ZDamage(id, dmg)
-  local z = System.GetEntityByName("ULZombie" .. id)
+  local z = SodCoop.ZEntity(id)
   if not z or not z.actor then return "sem zumbi" end
   if z:IsDead() then return "ja morto" end
   local h = z.actor:GetHealth()
@@ -68,39 +83,44 @@ end
 -- do que do host (h): vira para ele, corre (SetWorldPos) e golpeia a cada 1,8 s.
 -- Solta o zumbi quando o cliente se afasta ou o host fica mais perto. Devolve os
 -- ids dos zumbis cujo golpe acertou neste frame (0,4 s depois do início do golpe,
--- se o cliente ainda estiver a até 2,2 m), separados por espaço.
+-- se o cliente ainda estiver a até 2,2 m), separados por espaço. Vários zumbis
+-- ficam a pelo menos 0,9 m um do outro, em volta do cliente.
 function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
   local t = SodCoop.zTarget or {}
   t.x, t.y, t.z = tx, ty, tz
   SodCoop.zTarget = t
-  local hits, seen = {}, {}
+  local hits, seen, placed = {}, {}, {}
   for _, e in pairs(System.GetEntitiesInSphere(t, aggro + 8) or {}) do
     local n = e:GetName()
-    if string.sub(n, 1, 8) == "ULZombie" and e.actor and not e:IsDead() and e.actor:GetHealth() > 0 then
+    local id = SodCoop.EId(e)
+    if id and string.sub(n, 1, 8) == "ULZombie" and e.actor and not e:IsDead() and e.actor:GetHealth() > 0 then
+      SodCoop.zById[id] = e
       local p = e:GetWorldPos()
       local dx, dy = tx - p.x, ty - p.y
       local dc = math.sqrt(dx * dx + dy * dy)
       local dh = math.sqrt((hx - p.x) ^ 2 + (hy - p.y) ^ 2)
-      local c = SodCoop.zc[n]
+      local c = SodCoop.zc[id]
       if not c and dc < aggro and dc < dh then
         c = { strikeAt = -100, n = 0, busyUntil = 0 }
-        SodCoop.zc[n] = c
+        SodCoop.zc[id] = c
       elseif c and (dc > aggro + 6 or dh < dc - 3) then
-        SodCoop.zc[n] = nil
+        SodCoop.zc[id] = nil
         c = nil
       end
       if c then
-        seen[n] = true
+        seen[id] = true
         if dc > 0.01 then e:SetWorldAngles({ x = 0, y = 0, z = math.atan2(-dx, dy) }) end
         if c.hitAt and now >= c.hitAt then
           c.hitAt = nil
-          if dc <= 2.2 then hits[#hits + 1] = string.sub(n, 9) end
+          if dc <= 2.2 then hits[#hits + 1] = tostring(id) end
         end
+        local np = { x = p.x, y = p.y, z = p.z }
         if now < c.busyUntil then
           -- golpe em andamento: fica parado
         elseif dc > 1.6 then  -- para a 1,3 m; golpeia a até 1,6 m
           local s = math.min(dc - 1.3, (SodCoop.zSpeed[e.class] or 3.5) * dt)
-          e:SetWorldPos({ x = p.x + dx / dc * s, y = p.y + dy / dc * s, z = p.z + (tz - p.z) * math.min(1, dt * 4) })
+          np.x, np.y = p.x + dx / dc * s, p.y + dy / dc * s
+          np.z = p.z + (tz - p.z) * math.min(1, dt * 4)
           c.anim = "ZombieMelee_run_forward_loop"
         elseif now - c.strikeAt >= 1.8 then
           c.strikeAt = now
@@ -111,11 +131,25 @@ function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
         else
           c.anim = "Test_wander_idle"
         end
+        -- Afasta dos zumbis já posicionados neste frame e não deixa entrar no cliente.
+        for _, q in ipairs(placed) do
+          local ox, oy = np.x - q.x, np.y - q.y
+          local od = math.sqrt(ox * ox + oy * oy)
+          if od < 0.9 then
+            if od < 0.01 then ox, oy, od = -dy, dx, math.max(dc, 0.01) end
+            np.x, np.y = np.x + ox / od * (0.9 - od), np.y + oy / od * (0.9 - od)
+          end
+        end
+        local rx, ry = np.x - tx, np.y - ty
+        local rd = math.sqrt(rx * rx + ry * ry)
+        if rd < 1.0 and rd > 0.01 then np.x, np.y = tx + rx / rd * 1.0, ty + ry / rd * 1.0 end
+        if np.x ~= p.x or np.y ~= p.y or np.z ~= p.z then e:SetWorldPos(np) end
+        placed[#placed + 1] = np
       end
     end
   end
-  for n, _ in pairs(SodCoop.zc) do
-    if not seen[n] then SodCoop.zc[n] = nil end
+  for id, _ in pairs(SodCoop.zc) do
+    if not seen[id] then SodCoop.zc[id] = nil end
   end
   return table.concat(hits, " ")
 end
@@ -271,7 +305,7 @@ void updateChase(const Config& cfg, double now, const engine::Vec3& self, bool o
         size_t end = hits.find(' ', start);
         if (end == std::string::npos) end = hits.size();
         net::HitEvent hit;
-        hit.zombieId = static_cast<uint16_t>(atoi(hits.c_str() + start));
+        hit.zombieId = static_cast<uint32_t>(strtoul(hits.c_str() + start, nullptr, 10));
         hit.kind = 2;
         hit.damage = cfg.attackDamage;
         net::sendHit(hit);
@@ -285,7 +319,7 @@ struct Puppet {
     std::string anim;
     engine::Vec3 pos{};  // posição desenhada no último frame
 };
-std::map<uint16_t, Puppet> g_puppets;
+std::map<uint32_t, Puppet> g_puppets;  // EntityId do zumbi no host -> fantoche
 bool g_clientWorld = false;  // já desligou os zumbis locais neste mundo
 double g_nextLocalCheck = 0;
 
@@ -325,21 +359,20 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
     while (start < names.size()) {
         size_t end = names.find(' ', start);
         if (end == std::string::npos) end = names.size();
-        std::string name = names.substr(start, end - start);
+        const std::string item = names.substr(start, end - start);
         start = end + 1;
-        std::string chaseAnim;  // animação escolhida pelo ZChase, se o mod conduz o zumbi
-        const size_t eq = name.find('=');
-        if (eq != std::string::npos) {
-            chaseAnim = name.substr(eq + 1);
-            name.resize(eq);
-        }
-        if (name.size() <= 8) continue;
-        void* entity = engine::findEntityByName(name.c_str());
+        // "EntityId" ou "EntityId=animação" (animação escolhida pelo ZChase, se o mod conduz o zumbi).
+        std::string chaseAnim;
+        const size_t eq = item.find('=');
+        if (eq != std::string::npos) chaseAnim = item.substr(eq + 1);
+        const engine::EntityId id = static_cast<engine::EntityId>(strtoul(item.c_str(), nullptr, 10));
+        if (id == 0) continue;
+        void* entity = engine::getEntity(id);
         engine::Matrix34 tm;
         engine::Vec3 angles{};
         if (!entity || !engine::getWorldTM(entity, tm) || !engine::getWorldAngles(entity, angles)) continue;
         net::ZombieState z;
-        z.id = static_cast<uint16_t>(atoi(name.c_str() + 8));
+        z.id = id;
         z.pos[0] = tm.m[0][3];
         z.pos[1] = tm.m[1][3];
         z.pos[2] = tm.m[2][3];
@@ -358,7 +391,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         static std::vector<std::string> seenModels;
         if (!model.empty() && std::find(seenModels.begin(), seenModels.end(), model) == seenModels.end()) {
             seenModels.push_back(model);
-            log::info("zombies: modelo novo no host: %s (%s)", model.c_str(), name.c_str());
+            log::info("zombies: modelo novo no host: %s (entidade %u)", model.c_str(), id);
         }
         list.push_back(z);
     }
@@ -408,7 +441,7 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
         }
     }
 
-    const std::map<uint16_t, net::RemoteZombie> remote = net::getRemoteZombies();
+    const std::map<uint32_t, net::RemoteZombie> remote = net::getRemoteZombies();
 
     // Fantoches de zumbis que o host não manda mais.
     for (auto it = g_puppets.begin(); it != g_puppets.end();) {
@@ -477,7 +510,7 @@ void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self,
     float dl = std::sqrt(aimDir.x * aimDir.x + aimDir.y * aimDir.y + aimDir.z * aimDir.z);
     const engine::Vec3 d = dl > 0.01f ? engine::Vec3{aimDir.x / dl, aimDir.y / dl, aimDir.z / dl}
                                       : engine::Vec3{fx, fy, 0};
-    uint16_t best = 0;
+    uint32_t best = 0;
     float bestScore = 1e9f;
     for (const auto& [id, p] : g_puppets) {
         if (kind == AttackKind::Melee) {

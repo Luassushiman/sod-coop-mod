@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 13;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead
+inline constexpr uint16_t kProtocolVersion = 14;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32)
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -70,7 +70,7 @@ inline constexpr int kZombieModelSize = 64;
 inline constexpr int kMaxZombiesPerPacket = 10;
 
 struct ZombieEntry {
-    uint16_t id;                  // número do nome "ULZombie<id>" no host
+    uint32_t id;                  // EntityId do zumbi no host (o nome "ULZombie<n>" pode repetir)
     uint8_t flags;                // bit 0: animação em loop
     float pos[3];
     float yaw;
@@ -87,7 +87,7 @@ struct ZombiesPacket {
 struct HitPacket {
     Header h;
     uint16_t hitSeq;    // por remetente; o outro lado descarta repetidos
-    uint16_t zombieId;  // ZombieEntry.id (alvo ou atacante)
+    uint32_t zombieId;  // ZombieEntry.id (alvo ou atacante)
     uint8_t kind;       // 0 = corpo a corpo, 1 = tiro (cliente -> host); 2 = ataque de zumbi (host -> cliente)
     float damage;
 };

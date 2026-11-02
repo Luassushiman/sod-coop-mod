@@ -55,7 +55,7 @@ struct RemoteState {
 
 // Zumbi como trafega na rede (host -> cliente).
 struct ZombieState {
-    uint16_t id = 0;
+    uint32_t id = 0;  // EntityId no host
     bool loop = false;
     float pos[3] = {};
     float yaw = 0;
@@ -71,7 +71,7 @@ struct RemoteZombie {
 
 // Golpe do cliente num zumbi do host, ou de um zumbi do host no jogador do cliente.
 struct HitEvent {
-    uint16_t zombieId = 0;
+    uint32_t zombieId = 0;
     uint8_t kind = 0;  // 0 = corpo a corpo, 1 = tiro (do cliente); 2 = ataque de zumbi (do host)
     float damage = 0;
 };
@@ -86,7 +86,7 @@ RemoteState getRemoteState();
 void setLocalZombies(const std::vector<ZombieState>& zombies);
 // Cliente: zumbis recebidos (id -> estado). Entradas sem atualização somem
 // depois de 1,5 s.
-std::map<uint16_t, RemoteZombie> getRemoteZombies();
+std::map<uint32_t, RemoteZombie> getRemoteZombies();
 
 // Envia um golpe ao outro lado (3 cópias; quem recebe descarta as repetidas).
 void sendHit(const HitEvent& hit);

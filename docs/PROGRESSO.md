@@ -185,3 +185,24 @@ Achados:
 Limitações da etapa 2d:
 - Com o client morto, o host também deixa de listar zumbis perto do corpo dele (só os perto do host).
 - Não há reviver nem troca de personagem sincronizada; depois da morte, o client segue o fluxo normal do jogo sozinho.
+
+## Zumbis — etapa 2e: vários zumbis no client (2026-11-02, parcial)
+
+- `SodCoop.ZChase` passou a separar os zumbis conduzidos: cada um fica a pelo menos 0,9 m dos outros e a pelo menos 1,0 m do client.
+- Teste: dois zumbis (ULZombie19 e ULZombie28) golpearam o client em sequência (55 → 47 → 39 → 31). A separação **não foi medida**: nunca houve dois zumbis parados juntos no client por tempo suficiente.
+
+Achados:
+- Só zumbis **ativos** (a menos de ~15 m do host) podem ser movidos pelo mod; os mais longe são recolocados pelo `ZombieManager` a cada frame (empurrar 0,3 m a cada 50 ms quase não os moveu). `zm_activationDist` maior não mudou isso.
+- Teleporte grande de um zumbi ativo às vezes é desfeito em menos de 0,2 s; aproximar aos poucos (0,2 m a cada 50 ms) funciona.
+- Com o host perto do client (~8 m), a IA do jogo puxa os zumbis de volta para o host e ganha do mod; com o host a 20 m ou mais, o mod mantém o zumbi no client.
+- Os nomes `ULZombie<n>` **podem repetir** (dois `ULZombie3`, três `ULZombie4` vivos ao mesmo tempo). Corrigido em seguida: o mod passou a usar o `EntityId` (ver abaixo).
+- Matar com `ZDamage` um zumbi conduzido no meio de um golpe **fechou o host** uma vez (log `testenv/host/sodcoop_host_crash_zkill.log`); matar um Feral conduzido funcionou antes. Causa não investigada.
+- Logo depois de carregar, os zumbis do grupo que o host vê ao longe ainda não são entidades: só viram zumbis ativos quando o host chega a ~15 m.
+
+### Ids de zumbi = EntityId (protocolo v14)
+
+- O host identifica cada zumbi pelo `EntityId` (u32), e não mais pelo número do nome. No Lua, o handle `e.id` só mostra o número pelo `tostring` ("userdata: 0002FCFA"); `SodCoop.EId(e)` converte e `SodCoop.zById` guarda a entidade de cada id.
+- `ZombieEntry.id` e `Hit.zombieId` passaram a u32; o fantoche do client, o dano do client (`ZDamage`) e a perseguição (`SodCoop.zc`) usam o mesmo id.
+- Os `EntityId` dos zumbis passam de 16 bits (ex.: 0x0002FCFA, 0x0001FD8A), por isso o tipo da rede mudou.
+- Teste (duas instâncias): espelho e perseguição com os ids novos; dois zumbis (196344 e 196345) golpearam o client em sequência (25 → 17 → 10 → 3 → 1, vida travada em 1 só no teste). A distância mínima entre eles medida foi 1,96 m (ainda chegando); a separação com os dois parados ao lado do client continua sem medida.
+- `Zombie.SpawnZombies` (bind `0x01567F20` → `ZMSpawnZombies` `0x0134E250`, argumentos: origem xyz, destino xyz, quantidade, ?, flags) roda sem erro com várias combinações de argumentos, mas não criou zumbis; causa não investigada.
