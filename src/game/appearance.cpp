@@ -28,17 +28,24 @@ bool safeName(const std::string& s) {
     return true;
 }
 
-bool safePath(const std::string& s) {
-    if (s.size() < 16 || s.size() > 160 || s.compare(0, 11, "characters/") != 0 ||
-        s.compare(s.size() - 4, 4, ".chr") != 0 || s.find("..") != std::string::npos)
+// Caminho de arquivo do jogo dentro de characters/ (sem "..", só caracteres simples).
+bool safeAsset(const std::string& s) {
+    if (s.size() < 12 || s.size() > 160 || s.compare(0, 11, "characters/") != 0 || s.find("..") != std::string::npos)
         return false;
     for (char c : s)
         if (!isalnum(static_cast<unsigned char>(c)) && !strchr("_/.-", c)) return false;
     return true;
 }
 
-std::map<std::string, std::string> parse(const std::string& parts) {
-    std::map<std::string, std::string> out;
+bool safePath(const std::string& s) { return safeAsset(s) && s.compare(s.size() - 4, 4, ".chr") == 0; }
+
+struct Part {
+    std::string path, material;
+};
+
+// "anexo=arquivo.chr|material;..." (material opcional).
+std::map<std::string, Part> parse(const std::string& parts) {
+    std::map<std::string, Part> out;
     size_t start = 0;
     while (start < parts.size()) {
         size_t end = parts.find(';', start);
@@ -47,8 +54,15 @@ std::map<std::string, std::string> parse(const std::string& parts) {
         start = end + 1;
         const size_t eq = item.find('=');
         if (eq == std::string::npos) continue;
-        const std::string name = item.substr(0, eq), path = item.substr(eq + 1);
-        if (safeName(name) && safePath(path)) out[name] = path;
+        const std::string name = item.substr(0, eq);
+        std::string path = item.substr(eq + 1), material;
+        const size_t bar = path.find('|');
+        if (bar != std::string::npos) {
+            material = path.substr(bar + 1);
+            path.resize(bar);
+            if (!safeAsset(material)) material.clear();
+        }
+        if (safeName(name) && safePath(path)) out[name] = {path, material};
     }
     return out;
 }
@@ -70,8 +84,9 @@ void updateLocal(bool settled, engine::EntityId localId) {
     std::string text = "base=" + base + ";";
     for (const engine::SkinPart& p : parts) {
         if (!safeName(p.name) || !safePath(p.path)) continue;
-        const std::string item = p.name + "=" + p.path + ";";
-        if (text.size() + item.size() >= 700) break;
+        const std::string item =
+            p.name + "=" + p.path + (safeAsset(p.material) ? "|" + p.material : std::string()) + ";";
+        if (text.size() + item.size() >= 1150) break;
         text += item;
     }
     static std::string last;
@@ -85,9 +100,9 @@ void updateLocal(bool settled, engine::EntityId localId) {
 std::string puppetModel(const std::string& fallback) {
     std::string text;
     if (!net::getRemoteLook(text)) return fallback;
-    const std::map<std::string, std::string> want = parse(text);
+    const std::map<std::string, Part> want = parse(text);
     auto it = want.find("base");
-    return it != want.end() && want.size() > 1 ? it->second : fallback;
+    return it != want.end() && want.size() > 1 ? it->second.path : fallback;
 }
 
 void updatePuppet(bool settled) {
@@ -108,20 +123,20 @@ void updatePuppet(bool settled) {
     }
     g_appliedSpawn = spawn;
     g_appliedSeq = seq;
-    const std::map<std::string, std::string> want = parse(text);
+    const std::map<std::string, Part> want = parse(text);
     auto base = want.find("base");
     std::vector<engine::SkinPart> have;
     if (base == want.end() || !engine::listSkinParts(puppet, have)) return;
-    if (!have.empty() || anim_watch::modelPath(puppet) != base->second) {
+    if (!have.empty() || anim_watch::modelPath(puppet) != base->second.path) {
         // Criado antes de a aparência chegar (modelo padrão, já com partes): recria só
         // com o esqueleto, para nunca tirar partes de um personagem em uso.
         remote_player::respawn("aparencia recebida");
         return;
     }
     int added = 0, failed = 0;
-    for (const auto& [name, path] : want) {
+    for (const auto& [name, part] : want) {
         if (name == "base") continue;
-        if (engine::attachSkinPart(puppet, name.c_str(), path.c_str()))
+        if (engine::attachSkinPart(puppet, name.c_str(), part.path.c_str(), part.material.c_str()))
             ++added;
         else
             ++failed;

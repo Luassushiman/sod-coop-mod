@@ -194,6 +194,8 @@ Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal
 | Objeto de anexo de personagem | vtable `0x017992C8`; `+0x08` GetType = 2; `+0x30` GetICharacterInstance (`this+4`) | VALIDADO-RUNTIME | partes lidas do jogador |
 | Prender parte de pele | `0x0131BCC0` cdecl `(ICharacterInstance*, const char* anexo, const char* arquivo.chr, bool clonarMaterial)`; cria o anexo (tipo 2), `ICharacterManager` (`gEnv+0x4C`) `+0x0C` CreateInstance e liga | VALIDADO-RUNTIME | fantoche montado com 6 partes |
 | Troca de sobrevivente | comandos `fm_nextMember` / `fm_prevMember` (`0x015DF630`) | VALIDADO-RUNTIME | aparência do client mudou |
+| Material da parte | `IAttachmentObject` `+0x34` GetMaterial (substituto em `this+8`, senão o do modelo), `+0x38`/`+0x3C` SetReplacementMaterial (`this+8`/`this+0xC`); `IMaterial` `+0x18` GetName (`this+0x18`) | VALIDADO-RUNTIME | nomes `.../variant/vNN` lidos; cores iguais no fantoche |
+| `IMaterialManager` | `I3DEngine` `+0x21C` GetMaterialManager; `+0x14` LoadMaterial(nome, bool, bool, bool) — 4 argumentos; `+0x20` CloneMaterial(mtl, -1) | VALIDADO-RUNTIME | uso em `0x0149E560` e `0x0131BCC0`; 5 argumentos derrubou o jogo |
 
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 

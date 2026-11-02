@@ -243,12 +243,18 @@ bool listSkinParts(void* entity, std::vector<SkinPart>& out) {
         const char* name = vfunc<Name_t>(att, vt::kAttachment_GetName)(att);
         const char* path = looksLikeObject(part) ? characterFilePath(part) : nullptr;
         if (!isReadable(name, 1) || !path) continue;
-        out.push_back({name, path});
+        std::string material;
+        void* mtl = vfunc<GetPtr_t>(obj, vt::kAttachmentObject_GetMaterial)(obj);
+        if (looksLikeObject(mtl)) {
+            const char* mtlName = vfunc<Name_t>(mtl, vt::kMaterial_GetName)(mtl);
+            if (isReadable(mtlName, 1)) material = mtlName;
+        }
+        out.push_back({name, path, material});
     }
     return true;
 }
 
-bool attachSkinPart(void* entity, const char* name, const char* path) {
+bool attachSkinPart(void* entity, const char* name, const char* path, const char* material) {
     void* character = characterOf(entity);
     if (!character) return false;
     using GetPtr_t = void*(__thiscall*)(void*);
@@ -257,7 +263,20 @@ bool attachSkinPart(void* entity, const char* name, const char* path) {
     if (!looksLikeObject(am) || vfunc<ByName_t>(am, vt::kAttachmentManager_GetInterfaceByName)(am, name))
         return false;  // a função do jogo não trata anexo já existente
     using Attach_t = void*(__cdecl*)(void*, const char*, const char*, bool);
-    return reinterpret_cast<Attach_t>(kAttachSkinPart)(character, name, path, false) != nullptr;
+    void* obj = reinterpret_cast<Attach_t>(kAttachSkinPart)(character, name, path, false);
+    if (!looksLikeObject(obj)) return false;
+    if (!material || !*material) return true;
+    void* engine3d = gEnvField(genv::k3DEngine);
+    if (!looksLikeObject(engine3d)) return true;
+    void* mm = vfunc<GetPtr_t>(engine3d, vt::k3DEngine_GetMaterialManager)(engine3d);
+    if (!looksLikeObject(mm)) return true;
+    using Load_t = void*(__thiscall*)(void*, const char*, bool, bool, bool);
+    void* mtl = vfunc<Load_t>(mm, vt::kMaterialManager_LoadMaterial)(mm, material, true, false, false);
+    if (!looksLikeObject(mtl)) return true;
+    using SetMtl_t = void(__thiscall*)(void*, void*);
+    vfunc<SetMtl_t>(obj, vt::kAttachmentObject_SetReplacementMaterial)(obj, mtl);
+    vfunc<SetMtl_t>(obj, vt::kAttachmentObject_SetReplacementMaterialRT)(obj, mtl);
+    return true;
 }
 
 namespace {

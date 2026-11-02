@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 16;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look
+inline constexpr uint16_t kProtocolVersion = 17;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes)
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -93,11 +93,11 @@ struct HitPacket {
     uint8_t kind;       // 0 = corpo a corpo, 1 = tiro (cliente -> host); 2 = ataque de zumbi (host -> cliente)
     float damage;
 };
-inline constexpr int kLookSize = 720;
+inline constexpr int kLookSize = 1200;
 struct LookPacket {
     Header h;
     uint16_t lookSeq;       // muda quando a aparência muda
-    char parts[kLookSize];  // "anexo=arquivo.chr;anexo=arquivo.chr;..." (partes de pele do slot 0)
+    char parts[kLookSize];  // "anexo=arquivo.chr|material;..." (partes de pele do slot 0)
 };
 #pragma pack(pop)
 

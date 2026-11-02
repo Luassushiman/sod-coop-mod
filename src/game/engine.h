@@ -77,6 +77,17 @@ inline constexpr size_t kAttachment_GetName = 0x04;               // const char*
 inline constexpr size_t kAttachment_GetIAttachmentObject = 0x60;  // IAttachmentObject* () = this+0xA4
 inline constexpr size_t kAttachmentObject_GetType = 0x08;         // int (): 2 = personagem (pele)
 inline constexpr size_t kAttachmentObject_GetICharacterInstance = 0x30;  // ICharacterInstance* () = this+4
+// Material da parte: o substituto (this+8) ou o do modelo. A cor de cada sobrevivente vem
+// de um material de variante (ex.: ".../tshirt_jeans/variant/v16").
+inline constexpr size_t kAttachmentObject_GetMaterial = 0x34;             // IMaterial* ()
+inline constexpr size_t kAttachmentObject_SetReplacementMaterial = 0x38;  // void (IMaterial*) = this+8
+inline constexpr size_t kAttachmentObject_SetReplacementMaterialRT = 0x3C; // void (IMaterial*) = this+0xC
+inline constexpr size_t kMaterial_GetName = 0x18;                         // const char* () = this+0x18
+// Carregar material como em 0x0149E560: (*(gEnv+0x24))->vt[0x21C]() = IMaterialManager;
+// +0x14 LoadMaterial(const char* nome, bool criarSeFaltar, bool, bool): 4 argumentos; o -1
+// empilhado antes é do CloneMaterial(+0x20) seguinte (com 5, o jogo caiu em EIP=0).
+inline constexpr size_t k3DEngine_GetMaterialManager = 0x21C;
+inline constexpr size_t kMaterialManager_LoadMaterial = 0x14;
 // CCharInstance+0x88 -> modelo; caminho (char*) em modelo+4.
 inline constexpr size_t kCharInstance_Model = 0x88;
 inline constexpr size_t kCharModel_FilePath = 0x04;
@@ -136,11 +147,12 @@ bool getWorldAngles(void* entity, Vec3& out);
 
 // Partes de pele (anexos do tipo personagem) do slot 0: nome do anexo -> arquivo .chr.
 struct SkinPart {
-    std::string name, path;
+    std::string name, path, material;  // material: "" se não foi possível ler
 };
 bool listSkinParts(void* entity, std::vector<SkinPart>& out);
-// Prende a parte `path` no anexo `name` do slot 0 (o anexo não pode existir; ver kAttachSkinPart).
-bool attachSkinPart(void* entity, const char* name, const char* path);
+// Prende a parte `path` no anexo `name` do slot 0 (o anexo não pode existir; ver kAttachSkinPart)
+// e, se `material` não for vazio, põe esse material (cor da variante) na parte.
+bool attachSkinPart(void* entity, const char* name, const char* path, const char* material);
 
 // Hora do dia do motor (ITimeOfDay), em horas 0..24.
 bool getTimeOfDay(float& hour);

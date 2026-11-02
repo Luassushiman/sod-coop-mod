@@ -235,6 +235,13 @@ Limitações da etapa 1:
 - Teste: os dois fantoches montados com as 6 partes reais, sem falha; `fm_nextMember` no client → o host recriou o fantoche com a nova aparência em < 1 s. Confirmado pelo usuário por imagem (boné, camiseta, mochila e jeans iguais nas duas janelas).
 
 Limitações da etapa 3:
-- **Cores**: o jogo aplica um tom por cima de cada parte (material); o fantoche fica com as cores padrão (ex.: camiseta clara no host, vinho no client).
+- Cores: resolvidas em seguida (ver "cores das roupas" abaixo).
 - Não testado com sobrevivente mulher (outro esqueleto) nem com o client trocando de sobrevivente pelo menu do jogo.
 - A troca é manual (`fm_nextMember` pelo `sodcoop_cmd.lua`); o NPC do sobrevivente do client continua existindo na comunidade do host.
+
+### Cores das roupas (protocolo v17) ✅
+
+- A cor de cada parte vem de um material de variante (ex.: `characters/male/human/body/tshirt_jeans/variant/v16`, `.../packs/small01/variant/v12`), posto como material substituto do anexo. Lido com `IAttachmentObject::GetMaterial` (`+0x34`) e `IMaterial::GetName` (`+0x18`).
+- O `Look` passou a levar `anexo=arquivo.chr|material` (até 1200 bytes). O fantoche carrega o material com `IMaterialManager::LoadMaterial` (`I3DEngine +0x21C` → `+0x14`, **4 argumentos**: nome, criarSeFaltar, bool, bool) e o põe com `SetReplacementMaterial` (`+0x38` e `+0x3C`), logo depois de prender a parte.
+- Erro no caminho: com 5 argumentos no `LoadMaterial` (o `-1` empilhado antes é do `CloneMaterial` seguinte), as duas cópias caíram em `EIP=0` ao montar o fantoche (dumps de 20:34:55/56).
+- Teste: client trocou de sobrevivente; o host montou o fantoche com as 6 partes e os materiais (camiseta v16, mangas v03, jeans v03, boné v02, mochila v12); o usuário confirmou que as cores batem nas duas janelas.
