@@ -250,3 +250,10 @@ Limitações da etapa 3:
 - F6 / F7 trocam o jogador local para o sobrevivente anterior/próximo (`fm_prevMember` / `fm_nextMember`), sem precisar de base. Só com a janela daquela cópia em primeiro plano, no mundo e vivo. `[keys] prev_member` / `next_member` (código de tecla virtual do Windows; 0 desliga).
 - No jogo, a troca pelo próprio menu só existe numa base, com amigos; o save de teste ainda não tem base. A aparência se atualiza com qualquer troca, pelo pacote `Look`.
 - Teste: dois F7 no client; o host recriou o fantoche nas duas vezes. Na segunda, uma **sobrevivente mulher** (esqueleto `characters/female/human/skeleton/...`), com as 6 partes, sem falha. Confirmado pelo usuário.
+### Menu de sobreviventes no F7 ✅
+
+- F7 abre/fecha um menu em texto no alto à esquerda; setas escolhem, PgUp/PgDn pulam 10, Enter troca (`fm_nextMember N`, que vai direto ao membro N: `FUN_0148F4C0` → `FUN_014919C0`). F6 continua trocando direto para o anterior.
+- Lista de membros: total em `0x01E65864` (149 neste save), registros de 0x34 bytes em `*(0x01E65874)` com o `.cdf` do corpo em +8; membro atual em `*(0x01E658C8)`, índice u16 em +0xF4. O jogo não guarda o nome em texto: cada linha mostra número, sexo e roupa (do caminho do `.cdf`), sem acentos.
+- Desenho: a função de texto 2D de depuração do jogo (`0x00473160`, cdecl `(IRenderer* = gEnv+0x10, x, y, tamanho, rgba*, centralizar, formato, ...)`, a mesma do `fm_stats`). `System.DrawText` (Lua) não aparece neste jogo; `System.DrawLabel` (ponto 3D) aparece, mas seguia a câmera com atraso.
+- Correção junto: o fantoche passou a ser localizado pelo id guardado no Lua (`puppet::entity()`), não pelo nome. Pelo nome, logo depois de recriá-lo o mod achava o fantoche anterior (que existe até o fim do frame) e a aparência entrava em laço de recriação.
+- Teste: menu fixo e legível (confirmado pelo usuário); troca pelo menu para o nº 86 (mulher); o host recriou o fantoche uma única vez, com o esqueleto feminino e as 6 partes.

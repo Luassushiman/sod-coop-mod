@@ -28,6 +28,7 @@
 #include "game/puppet.h"
 #include "game/remote_player.h"
 #include "game/appearance.h"
+#include "game/member_menu.h"
 #include "game/zombies.h"
 #include "net/session.h"
 
@@ -263,8 +264,10 @@ void memberSwitchKeys(bool settled, bool dead) {
         wasDown = down;
         return edge;
     };
+    // A tecla de "próximo" (F7) abre o menu de escolha (member_menu); aqui só a de "anterior".
     const bool prev = pressed(g_cfg.prevMemberKey, prevDown);
-    const bool next = pressed(g_cfg.nextMemberKey, nextDown);
+    const bool next = false;
+    (void)nextDown;
     if (!prev && !next) return;
     DWORD pid = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &pid);
@@ -439,6 +442,7 @@ void onFrame() {
     }
     net::setLocalState(mine);
     memberSwitchKeys(settled, mine.dead);
+    member_menu::update(g_cfg.nextMemberKey, settled, mine.dead);
 
     const bool logNow = now - lastLog >= (DWORD)g_cfg.positionLogIntervalMs;
     if (logNow) {

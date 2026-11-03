@@ -10,13 +10,13 @@
 #include "core/clock.h"
 #include "core/log.h"
 #include "game/anim_watch.h"
+#include "game/puppet.h"
 #include "game/remote_player.h"
 #include "net/session.h"
 
 namespace sodcoop::appearance {
 namespace {
 
-constexpr const char* kPuppetName = "sodcoop_puppet";  // igual ao de puppet.cpp
 constexpr double kLocalInterval = 2.0;                 // s
 
 // Só nomes de anexo e caminhos de modelo simples (vão para dentro de código Lua e
@@ -110,7 +110,7 @@ void updatePuppet(bool settled) {
     std::string text;
     const uint16_t seq = net::getRemoteLook(text);
     if (!seq) return;
-    void* puppet = engine::findEntityByName(kPuppetName);
+    void* puppet = sodcoop::puppet::entity();
     if (!puppet) return;
     const unsigned spawn = remote_player::spawnCount();
     if (spawn == g_appliedSpawn) {

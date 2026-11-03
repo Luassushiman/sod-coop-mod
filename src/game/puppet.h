@@ -42,6 +42,8 @@ bool readLuaText(const char* expr, std::string& out);
 bool setWeapon(const std::string& path);
 
 
+// Entidade do fantoche atual (pelo id guardado no Lua, não pelo nome); nullptr se não há.
+void* entity();
 // Posição atual da entidade do fantoche lida do motor (diagnóstico: detecta
 // se algo além do mod moveu a entidade). false se não encontrada.
 bool currentPosition(engine::Vec3& out);

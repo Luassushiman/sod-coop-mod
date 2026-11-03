@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "core/log.h"
@@ -184,7 +185,7 @@ bool spawn(const std::string& model, const engine::Vec3& pos, int drivenMotion) 
     if (ok && drivenMotion >= 0) {
         // Os clipes de locomoção têm deslocamento de raiz; o modo certo deve
         // impedir o corpo de avançar dentro do ciclo e "voltar" ao reiniciar o loop.
-        void* entity = engine::findEntityByName(kPuppetName);
+        void* entity = puppet::entity();
         bool set = entity && engine::setAnimationDrivenMotion(entity, drivenMotion != 0);
         log::info("puppet: entidade '%s' = %p; driven_motion=%d -> %s", kPuppetName, entity, drivenMotion,
                   set ? "OK" : "FALHOU");
@@ -258,8 +259,19 @@ bool setWeapon(const std::string& path) {
     return ok;
 }
 
+void* entity() {
+    // Pelo id da entidade guardada no Lua (SodCoop.puppet). Buscar pelo nome pode achar o
+    // fantoche anterior, que ainda existe até o fim do frame em que foi removido; isso pôs
+    // a aparência em laço de recriação (2026-11-03).
+    std::string text;
+    if (!readLuaText("SodCoop.PuppetAlive() and tostring(SodCoop.puppet.id) or ''", text)) return nullptr;
+    const size_t colon = text.rfind(' ');
+    const unsigned long id = strtoul(text.c_str() + (colon == std::string::npos ? 0 : colon + 1), nullptr, 16);
+    return id ? engine::getEntity(static_cast<engine::EntityId>(id)) : nullptr;
+}
+
 bool currentPosition(engine::Vec3& out) {
-    void* entity = engine::findEntityByName(kPuppetName);
+    void* entity = puppet::entity();
     engine::Matrix34 tm;
     if (!entity || !engine::getWorldTM(entity, tm)) return false;
     out = {tm.m[0][3], tm.m[1][3], tm.m[2][3]};
