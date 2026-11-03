@@ -45,6 +45,13 @@ struct Config {
     int maxFps = 60;                       // [debug] max_fps: limite de FPS (sys_MaxFPS); 0 = não mexe
     bool luaCommandFile = true;            // [debug] lua_command_file: executa sodcoop_cmd.lua (teste)
     bool animWatch = true;                 // [debug] anim_watch: registra as animações do jogador local
+    // [debug] start_pos=x,y,z (teste): ao entrar no mundo, o jogador local vai para esse ponto
+    // (ex.: a base do host). Vazio = não mexe.
+    bool startPosValid = false;
+    float startPos[3] = {};
+    // [debug] player_invisible=1 (teste): zm_playerInvisible 1 ao entrar no mundo (os zumbis
+    // ignoram o jogador local; o comando do jogo não fica salvo).
+    bool playerInvisible = false;
     // [puppet] modelo do fantoche (jogador remoto) e espelho local de teste
     zombies::Config zombies;               // [zombies] enabled, radius, model
     std::string puppetModel = "characters/male/human/body/tshirt_jeans/variant/v01.cdf";  // model
@@ -70,6 +77,9 @@ struct Config {
     AnimConfig anim;
     // [window] x, y, width, height (width/height 0 = não mexe na janela)
     window_keeper::Rect window;
+    // [video] width, height (0 = não mexe), fullscreen (1 = tela cheia, 0 = janela, -1 = não mexe):
+    // resolução que o menu do jogo não lista (ex.: 2560x1440). Sem efeito quando [window] está ligado.
+    int videoWidth = 0, videoHeight = 0, videoFullscreen = -1;
 };
 
 // Diretório do exe do jogo, com barra final (ex.: C:\...\testenv\host\).

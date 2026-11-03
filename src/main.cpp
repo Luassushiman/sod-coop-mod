@@ -230,6 +230,35 @@ void spawnNearHost(bool settled, const engine::Vec3& self, const net::RemoteStat
               h[1], h[2] + 0.5f, ok ? "OK" : "FALHOU");
 }
 
+// [debug] start_pos / player_invisible: uma vez por entrada no mundo, 2 s depois de pronto.
+void applyTestStart(bool settled, const engine::Vec3& self, DWORD now) {
+    static bool done = false;
+    static DWORD settledSince = 0;
+    if (!settled) {
+        done = false;
+        settledSince = 0;
+        return;
+    }
+    if (done) return;
+    if (!settledSince) settledSince = now;
+    if (now - settledSince < 2000) return;
+    done = true;
+    if (g_cfg.playerInvisible) {
+        const bool ok = engine::executeLua("System.ExecuteCommand(\"zm_playerInvisible 1\")", "sodcoop_invisible");
+        log::info("teste: zm_playerInvisible 1 -> %s", ok ? "OK" : "FALHOU");
+    }
+    if (g_cfg.startPosValid) {
+        const float* p = g_cfg.startPos;
+        const float dx = p[0] - self.x, dy = p[1] - self.y;
+        if (dx * dx + dy * dy < 25.0f) return;  // já está lá (a menos de 5 m)
+        char code[160];
+        snprintf(code, sizeof(code), "g_localActor:SetWorldPos({ x = %.2f, y = %.2f, z = %.2f })", p[0], p[1],
+                 p[2] + 0.3f);
+        const bool ok = engine::executeLua(code, "sodcoop_startpos");
+        log::info("teste: levado para start_pos (%.1f, %.1f, %.1f) -> %s", p[0], p[1], p[2], ok ? "OK" : "FALHOU");
+    }
+}
+
 // Cliente: segue a hora do dia do host. Acerta quando a diferença passa de 0,02 h
 // (~1 min de jogo); registra quantos acertos foram precisos a cada 10 s (se o
 // relógio do jogo desfizer o acerto, o número sobe).
@@ -380,6 +409,17 @@ void onFrame() {
         log::info("cvars: r_Fullscreen=0 r_Width=%d r_Height=%d -> %s", g_cfg.window.width - 16,
                   g_cfg.window.height - 39, ok ? "OK" : "FALHOU");
         videoApplied = true;
+    } else if (!videoApplied && g_cfg.videoWidth > 0 && g_cfg.videoHeight > 0) {
+        // [video]: resolução escolhida pelo jogador, inclusive as que o menu do jogo não lista.
+        char code[160];
+        int n = snprintf(code, sizeof(code), "System.SetCVar(\"r_Width\", %d); System.SetCVar(\"r_Height\", %d)",
+                         g_cfg.videoWidth, g_cfg.videoHeight);
+        if (g_cfg.videoFullscreen >= 0)
+            snprintf(code + n, sizeof(code) - n, "; System.SetCVar(\"r_Fullscreen\", %d)", g_cfg.videoFullscreen ? 1 : 0);
+        bool ok = engine::executeLua(code, "sodcoop_video");
+        log::info("cvars: [video] r_Width=%d r_Height=%d r_Fullscreen=%d -> %s", g_cfg.videoWidth, g_cfg.videoHeight,
+                  g_cfg.videoFullscreen, ok ? "OK" : "FALHOU");
+        videoApplied = true;
     }
     engine::EntityId id = local_player::currentId();
     if (id != lastId) {
@@ -498,6 +538,7 @@ void onFrame() {
     appearance::updateLocal(settled, id);
     appearance::updatePuppet(settled && remote.connected && remote.state.hasPlayer);
 
+    applyTestStart(settled, s.pos, now);
     // Zumbis: o host manda os dele; o cliente desliga os próprios e mostra os do host.
     if (g_cfg.net.role == net::Role::Host) {
         const engine::Vec3 other{remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]};
@@ -505,6 +546,16 @@ void onFrame() {
         const bool clientAlive = remote.connected && remote.state.hasPlayer && !remote.state.dead;
         zombies::updateHost(g_cfg.zombies, settled, s.pos, clientAlive, other);
         zombie_activation::setClient(g_cfg.zombies.clientActivation && settled && clientAlive, other);
+        // Teste (sodcoop_cmd.lua: SodCoop.pullReq = n): leva n zumbis para perto do cliente.
+        static DWORD nextPull = 0;
+        if (settled && clientAlive && now >= nextPull) {
+            nextPull = now + 500;
+            std::string req;
+            if (puppet::readLuaText("SodCoop.pullReq or 0", req) && atoi(req.c_str()) > 0) {
+                engine::executeLua("SodCoop.pullReq = nil", "sodcoop_pull");
+                zombie_activation::pullZombies(other, 12.0f, 200.0f, atoi(req.c_str()));
+            }
+        }
     } else {
         if (g_cfg.spawnNearHost) spawnNearHost(settled, s.pos, remote, now);
         if (g_cfg.syncTimeOfDay) followHostTime(settled, remote, now);

@@ -2,6 +2,7 @@
 
 #include <MinHook.h>
 
+#include <cmath>
 #include <cstdint>
 
 #include "core/log.h"
@@ -102,6 +103,26 @@ bool installHook(int type, int index) {
     if (s == MH_OK) s = MH_EnableHook(target);
     log::info("zombie_activation: hook em %p -> %s", target, MH_StatusToString(s));
     return s == MH_OK;
+}
+
+int pullZombies(const engine::Vec3& center, float radius, float from, int max) {
+    auto* zpos = reinterpret_cast<float*>(kZombiePos);
+    const auto* zflags = reinterpret_cast<const int32_t*>(kZombieFlags);
+    int moved = 0;
+    for (int z = 0; z < kZombieSlots && moved < max; ++z) {
+        if (zflags[z] >= 0) continue;
+        const float dx = zpos[z * 3] - center.x, dy = zpos[z * 3 + 1] - center.y;
+        const float d2 = dx * dx + dy * dy;
+        if (d2 > from * from || d2 < (radius + 3) * (radius + 3)) continue;
+        const float a = moved * 2.39996f;  // ângulo áureo: espalha em volta
+        zpos[z * 3] = center.x + radius * std::cos(a);
+        zpos[z * 3 + 1] = center.y + radius * std::sin(a);
+        zpos[z * 3 + 2] = center.z;
+        ++moved;
+    }
+    log::info("zombie_activation: %d zumbi(s) lab levados para %.0f m de (%.1f, %.1f)", moved, radius, center.x,
+              center.y);
+    return moved;
 }
 
 void setClient(bool valid, const engine::Vec3& pos) {

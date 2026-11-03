@@ -364,3 +364,15 @@ Pendências:
 - **Corpos (ragdoll):** os mortos caem por física, sem animação de morte, e os fantoches ficavam na última pose. Agora o fantoche do outro jogador (quando `State.dead`) e o fantoche do zumbi no client (quando o host o marca morto, `ZombieEntry.flags` bit 1) viram ragdoll: `Properties.Physics` com `bPhysicalize`/`bRigidBody` = 1 e **`Mass` = 80** (com a massa padrão o corpo ficou pendurado em pé e esticado), `PhysicalizeThis()` e, 0,3 s e 1 s depois, `Event_RagDollize()` + `AwakePhysics(1)` (tudo no mesmo frame deixou o corpo parado curvado). Tombar o fantoche por ângulo não serve: a partir de ~85° o motor deixa de desenhá-lo. Confirmado: o corpo do client cai no host.
 - O client não mira mais em zumbis mortos (golpes iam para corpos).
 - **Pendência:** o golpe do client ainda parece "seco": o fantoche não tem física, então a arma o atravessa e o jogo não toca o impacto dele (parada da arma, sangue, som). Os nomes dos efeitos ficam nos `.pak` (protegidos). Próximo passo: testar dar um corpo físico ao fantoche para a arma bater nele.
+
+## Resolução fora da lista do jogo (2026-11-03, em pausa)
+
+- Pedido do usuário: jogar em 2560×1440 (monitor 2560×1440, 180 Hz); o menu do Year-One não lista essa resolução e não achamos mod pronto.
+- Opção `[video] width/height/fullscreen` no `sodcoop.ini` (sem efeito com `[window]` ligado): aplica `r_Width`/`r_Height`/`r_Fullscreen` no primeiro frame. **Não basta:** no mundo o jogo estava de novo em 1920×1080 em janela (`r_Fullscreen=0`), provavelmente pela configuração salva dele, aplicada depois. Aplicar os mesmos cvars com o jogador no mundo (`sodcoop_cmd.lua`) os deixou em 2560/1440/1; o resultado na tela não foi conferido.
+- Próximo passo quando retomar: descobrir quando e de onde o jogo reaplica a resolução salva (e reaplicar a nossa depois disso), e conferir o HUD (posições fixas de 1080p; o minimapa sai do lugar segundo relatos da Steam).
+
+## Teste com horda (2026-11-03)
+
+- **Opções de teste novas no `sodcoop.ini`:** `[debug] start_pos=x,y,z` (o jogador local vai para esse ponto 2 s depois de entrar no mundo, se estiver a mais de 5 m; o host usa a base, `3102.86,3319.96,230.69`) e `[debug] player_invisible=1` (`zm_playerInvisible 1` ao entrar no mundo, sem precisar do `sodcoop_cmd.lua`).
+- **Trazer zumbis:** `act_interceptHorde` (comando do jogo) não criou horda nenhuma; `Zombie.CreateEcho(pos, 150)` e `Zombie.SetAmbientDensity(3)` rodaram sem erro e não mudaram a contagem (`Zombie.NumZombiesInCircle`). Existe `cm_zombieHordeCreate` ("Create a zombie horde"), com argumentos ainda desconhecidos.
+- **Puxar pelo mod (teste):** `SodCoop.pullReq = n` no `sodcoop_cmd.lua` do host faz `zombie_activation::pullZombies` levar até n zumbis "lab" (a até 200 m do client) para um círculo de 12 m em volta dele, mudando a posição na simulação (`0x01DF2F80`). Com n = 8: os 8 viraram entidade em menos de 0,2 s, o host os conduziu (8 fantoches no host, 4 a 5 partes cada, sem falhas), o client montou os 8 com a aparência do host, 10 golpes acertaram o client e ele morreu em ~16 s. Nenhum fechamento. Confirmado pelo usuário ("funcionou bem").

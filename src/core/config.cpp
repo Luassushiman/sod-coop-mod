@@ -44,6 +44,12 @@ Config loadConfig() {
     c.keepRunningUnfocused = GetPrivateProfileIntW(L"debug", L"keep_running_unfocused", 0, ini.c_str()) != 0;
     c.maxFps = GetPrivateProfileIntW(L"debug", L"max_fps", 60, ini.c_str());
     c.luaCommandFile = GetPrivateProfileIntW(L"debug", L"lua_command_file", 1, ini.c_str()) != 0;
+    {
+        const std::string sp = readString(ini, L"debug", L"start_pos", "");
+        c.startPosValid = !sp.empty() &&
+                          sscanf(sp.c_str(), "%f , %f , %f", &c.startPos[0], &c.startPos[1], &c.startPos[2]) == 3;
+    }
+    c.playerInvisible = GetPrivateProfileIntW(L"debug", L"player_invisible", 0, ini.c_str()) != 0;
     c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 1, ini.c_str()) != 0;
     c.puppetModel = readString(ini, L"puppet", L"model", c.puppetModel);
     c.zombies.enabled = GetPrivateProfileIntW(L"zombies", L"enabled", 1, ini.c_str()) != 0;
@@ -94,6 +100,9 @@ Config loadConfig() {
     c.window.y = GetPrivateProfileIntW(L"window", L"y", 0, ini.c_str());
     c.window.width = GetPrivateProfileIntW(L"window", L"width", 0, ini.c_str());
     c.window.height = GetPrivateProfileIntW(L"window", L"height", 0, ini.c_str());
+    c.videoWidth = GetPrivateProfileIntW(L"video", L"width", 0, ini.c_str());
+    c.videoHeight = GetPrivateProfileIntW(L"video", L"height", 0, ini.c_str());
+    c.videoFullscreen = GetPrivateProfileIntW(L"video", L"fullscreen", -1, ini.c_str());
     return c;
 }
 

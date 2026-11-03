@@ -16,5 +16,9 @@ namespace sodcoop::zombie_activation {
 bool installHook(int type, int index);
 // Posição do jogador do cliente para o próximo frame; valid = false tira o ponto.
 void setClient(bool valid, const engine::Vec3& pos);
+// Teste: leva até `max` zumbis "lab" (vagas em uso, a até `from` m e a mais de radius + 3 m de
+// center) para um círculo de raio `radius` em volta de center, na altura de center. Devolve
+// quantos moveu. Thread principal.
+int pullZombies(const engine::Vec3& center, float radius, float from, int max);
 
 }  // namespace sodcoop::zombie_activation
