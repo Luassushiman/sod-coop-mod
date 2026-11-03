@@ -18,6 +18,7 @@
 #include "core/build_check.h"
 #include "core/clock.h"
 #include "core/config.h"
+#include "core/crash_log.h"
 #include "core/focus_guard.h"
 #include "core/log.h"
 #include "core/window_keeper.h"
@@ -26,6 +27,7 @@
 #include "game/frame.h"
 #include "game/local_player.h"
 #include "game/give_menu.h"
+#include "game/zombie_activation.h"
 #include "game/loot.h"
 #include "game/puppet.h"
 #include "game/remote_player.h"
@@ -343,6 +345,7 @@ void detectLocalAttacks(bool settled, const local_player::Snapshot& s, const net
 
 // Thread principal do jogo, uma vez por frame.
 void onFrame() {
+    crash_log::ensureInstalled();  // o jogo pode trocar o filtro depois de iniciar
     static engine::EntityId lastId = 0;
     static DWORD idSince = 0, lastLog = 0, lastRemoteLog = 0;
 
@@ -499,8 +502,9 @@ void onFrame() {
     if (g_cfg.net.role == net::Role::Host) {
         const engine::Vec3 other{remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]};
         // Jogador do cliente morto: os zumbis conduzidos pelo mod o soltam.
-        zombies::updateHost(g_cfg.zombies, settled, s.pos,
-                            remote.connected && remote.state.hasPlayer && !remote.state.dead, other);
+        const bool clientAlive = remote.connected && remote.state.hasPlayer && !remote.state.dead;
+        zombies::updateHost(g_cfg.zombies, settled, s.pos, clientAlive, other);
+        zombie_activation::setClient(g_cfg.zombies.clientActivation && settled && clientAlive, other);
     } else {
         if (g_cfg.spawnNearHost) spawnNearHost(settled, s.pos, remote, now);
         if (g_cfg.syncTimeOfDay) followHostTime(settled, remote, now);
@@ -539,6 +543,7 @@ DWORD WINAPI initThread(LPVOID) {
     // Sem isto o jogo abre o menu de pausa quando a janela perde o foco.
     if (g_cfg.keepRunningUnfocused) focus_guard::start();
     if (!local_player::installHook() || !frame::installHook()) return 0;
+    if (g_cfg.net.role == net::Role::Host && g_cfg.zombies.clientActivation) zombie_activation::installHook(g_cfg.zombies.clientPointType, g_cfg.zombies.clientPointIndex);
 
     if (!waitFor(&coreInterfacesReady, 300000, 100)) {
         log::error("gEnv/interfaces nao ficaram prontas em 300 s");

@@ -339,3 +339,17 @@ Limitações:
 - Dá a vaga inteira (a pilha toda).
 - Itens no chão, mochila de recurso carregada e armário da base: não sincronizados.
 
+## Zumbis — etapa 3: polimento (2026-11-03, parcial)
+
+- **Perseguição religada** no host (`[zombies] chase=1`), depois dos testes de carro e itens.
+- **Golpe visível no host: não dá pelo zumbi de verdade.** `StartAnimation` no zumbi do host tocou o golpe duas vezes e depois o deixou invisível para sempre (vivo, `IsHidden()` falso mesmo depois de `Hide(0)`). O `ZombieManager` controla a animação e o desenho dele. A alternativa seria esconder o zumbi no host e mostrar um fantoche, como no client.
+- **Host fechando ao matar um zumbi conduzido:** reproduzido 3 vezes (`ZDamage` → `Kill` pelo host, com o zumbi golpeando o client), sem exceção de memória nem `.dmp`. Depois, 4 mortes seguidas iguais funcionaram (vida 65 e 100, com e sem `zm_playerInvisible`); a causa não foi achada. Logs em `testenv/host/sodcoop_host_crash5/6/7_zkill.log`.
+- **Registro de fechamento** (`src/core/crash_log.cpp`): filtro de exceção não tratada (encadeado ao do jogo), registro de 1ª chance para erros graves (até 20) e interceptação de `ExitProcess`/`TerminateProcess`, com o chamador e os endereços do exe na pilha. Grava em `FECHAMENTO:`, `EXCECAO (1a chance):` e `SAIDA:` no log do mod.
+- **Zumbis perto do client (só a ~15 m do host):** o `ZombieManager` (`0x0133FF30`) monta a cada frame uma lista de até 20 pontos de interesse (`0x01DEE754` quantidade; posição `0x01E1CAA0`, direção `0x01E1CB90`, tipo `0x01DF0958`, índice `0x01DF096C`, flags `0x01DF0980`): tipo 0 jogador, 1 aliado (`ProtoAlly`), 2 carro (lista em `*(0x01E56AD4)`), 3 eco, etc. Em `DeterminePerception` (`0x01321D20`), o zumbi é ativado (`0x0133CF70`) se o ponto mais perto for do tipo 0 ou 1 e estiver a até `zm_activationDist` (float em `0x01908E30`; desativação em `0x01908E34`), **e** se o zumbi perceber esse ponto (visão com raycast) ou já estiver alerta. `src/game/zombie_activation.cpp` põe o client nessa lista (hook em `0x0140DED0`, no retorno `0x01340711`), como tipo 1 ou 0: o ponto entra, mas nenhum zumbi foi ativado (7 a 10 zumbis "lab" a menos de 40 m do client). Fica desligado (`[zombies] client_activation=0`). `Zombie.AggroInCircle`/`ActivateInCircle` na posição do client também não ativaram.
+- **Aparência dos zumbis no client:** os comuns usam um modelo simplificado único (homem de camiseta, `low.cdf`), sem as partes e texturas de cada zumbi; mulheres e roupas diferentes aparecem trocadas. Os especiais (feral, juggernaut...) usam o `.cdf` do tipo.
+
+Pendências:
+- Aumentar a distância de ativação perto do client (pedido do usuário): entender a percepção ou chamar `0x0133CF70` direto.
+- Partes e texturas dos zumbis no client (como o `Look` do jogador).
+- Golpe visível no host (fantoche no host).
+
