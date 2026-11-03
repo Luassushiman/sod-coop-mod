@@ -118,6 +118,19 @@ void updatePuppet(bool settled) {
         if (seq != g_appliedSeq) {
             g_appliedSeq = seq;
             remote_player::respawn("aparencia nova");
+            return;
+        }
+        // Algo pode recarregar o personagem do fantoche e levar todas as partes (visto em
+        // 2026-11-03: fantoche do host no client só com o esqueleto, sem partes nem arma).
+        static double nextCheck = 0;
+        const double now = clock::seconds();
+        if (now >= nextCheck) {
+            nextCheck = now + 2.0;
+            std::vector<engine::SkinPart> have;
+            if (engine::listSkinParts(puppet, have) && have.empty()) {
+                log::warn("aparencia: fantoche perdeu as partes; recriando");
+                remote_player::respawn("partes perdidas");
+            }
         }
         return;
     }

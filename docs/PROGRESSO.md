@@ -257,3 +257,7 @@ Limitações da etapa 3:
 - Desenho: a função de texto 2D de depuração do jogo (`0x00473160`, cdecl `(IRenderer* = gEnv+0x10, x, y, tamanho, rgba*, centralizar, formato, ...)`, a mesma do `fm_stats`). `System.DrawText` (Lua) não aparece neste jogo; `System.DrawLabel` (ponto 3D) aparece, mas seguia a câmera com atraso.
 - Correção junto: o fantoche passou a ser localizado pelo id guardado no Lua (`puppet::entity()`), não pelo nome. Pelo nome, logo depois de recriá-lo o mod achava o fantoche anterior (que existe até o fim do frame) e a aparência entrava em laço de recriação.
 - Teste: menu fixo e legível (confirmado pelo usuário); troca pelo menu para o nº 86 (mulher); o host recriou o fantoche uma única vez, com o esqueleto feminino e as 6 partes.
+### Fantoche sem partes (2026-11-03)
+
+- Visto uma vez: no client, o fantoche do host existia no lugar certo, visível, mas com o personagem recarregado (0 anexos: sem partes nem arma) logo depois de montado; só o esqueleto, que não aparece. Causa não achada (na mesma hora o client tinha sido levado de 2 km para o lado do host).
+- Proteção: a cada 2 s o mod confere se o fantoche montado ainda tem partes; se não tiver, registra `aparencia: fantoche perdeu as partes; recriando` e recria. No teste seguinte o problema não se repetiu.
