@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 22;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give
+inline constexpr uint16_t kProtocolVersion = 23;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -24,6 +24,7 @@ enum class PacketType : uint8_t {
     Searched = 9, // ambos: lugares de busca já vasculhados (bit por nó), a cada 1 s
     Container = 10, // ambos: o que sobrou num lugar vasculhado (ao mudar e a cada 2 s)
     Give = 11,    // ambos: item dado ao outro jogador (enviado 3x)
+    ZombieLook = 12, // host -> cliente: partes de um zumbi (ao aparecer e a cada 3 s)
 };
 
 #pragma pack(push, 1)
@@ -89,6 +90,7 @@ struct ZombieEntry {
     float yaw;
     char anim[kZombieAnimSize];   // animação mais nova da camada 0 do zumbi no host
     char model[kZombieModelSize]; // modelo base do personagem no host (.chr)
+    uint32_t lookHash;            // hash da aparência (ZombieLookPacket); 0 = ainda sem partes
 };
 
 struct ZombiesPacket {
@@ -133,10 +135,17 @@ struct LookPacket {
     uint16_t lookSeq;       // muda quando a aparência muda
     char parts[kLookSize];  // "anexo=arquivo.chr|material;..." (partes de pele do slot 0)
 };
+struct ZombieLookPacket {
+    Header h;
+    uint32_t zombieId;      // ZombieEntry.id
+    uint32_t lookHash;      // igual ao ZombieEntry.lookHash enquanto a aparência não muda
+    char parts[kLookSize];  // como LookPacket.parts; vai só até o 0 final
+};
 #pragma pack(pop)
 
 inline constexpr int kMaxPacketSize = 1400;
 static_assert(sizeof(ZombiesPacket) <= kMaxPacketSize, "pacote de zumbis maior que o buffer");
 static_assert(sizeof(LookPacket) <= kMaxPacketSize, "pacote de aparencia maior que o buffer");
+static_assert(sizeof(ZombieLookPacket) <= kMaxPacketSize, "pacote de aparencia de zumbi maior que o buffer");
 
 }  // namespace sodcoop::net

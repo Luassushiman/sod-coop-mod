@@ -3,7 +3,9 @@
 // Host: a cada 0,1 s lista os zumbis do jogo ("ULZombie<n>") perto dos dois
 // jogadores e envia posição, direção e animação (net::setLocalZombies).
 // Cliente: desliga os zumbis próprios (zm_disable 1 + zm_killAll) e mostra um
-// fantoche (AnimObject) para cada zumbi recebido do host.
+// fantoche (AnimObject) para cada zumbi recebido do host, montado com as partes de
+// pele e os materiais do zumbi no host (pacote ZombieLook; sem eles, o modelo
+// simplificado `model`).
 // Golpes do cliente vão ao host (pacote Hit). A IA do jogo só persegue o jogador do
 // host; os zumbis perto do cliente são conduzidos pelo mod no host (ZChase), e os
 // golpes deles vão ao cliente, que tira a vida do próprio jogador.
@@ -19,7 +21,7 @@ namespace sodcoop::zombies {
 struct Config {
     bool enabled = true;
     float radius = 80.0f;  // m em volta de cada jogador
-    // Modelo dos fantoches (modelo completo simplificado "EigenZombie" do jogo).
+    // Modelo dos fantoches sem a aparência do host (modelo completo simplificado "EigenZombie" do jogo).
     std::string model = "characters/male/zombie/body/tshirt_jeans/low/low.cdf";
     std::string rootBone = "Bip01 Pelvis";
     float meleeDamage = 35.0f;  // por golpe do cliente (Grunt tem 100 de vida)

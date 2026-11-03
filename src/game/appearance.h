@@ -9,6 +9,15 @@
 
 namespace sodcoop::appearance {
 
+// Aparência de um personagem como texto: "base=esqueleto.chr;anexo=arquivo.chr|material;..."
+// (até ~1150 bytes, cabe no pacote). parts = quantas partes entraram. "" se não deu para ler.
+std::string describe(void* entity, int* parts = nullptr);
+// Esqueleto ("base") de uma aparência com pelo menos uma parte; "" se não houver.
+std::string baseModel(const std::string& look);
+// Prende as partes de uma aparência num personagem recém-criado só com o esqueleto (nunca
+// num que já tem partes). Devolve quantas prendeu; failed = quantas falharam.
+int attachParts(void* entity, const std::string& look, int& failed);
+
 // A cada 2 s lê o esqueleto e as partes do jogador local e os entrega à rede.
 void updateLocal(bool settled, engine::EntityId localId);
 // Modelo com que o fantoche deve ser criado: o esqueleto do outro jogador, se a

@@ -53,6 +53,9 @@ uint16_t g_localLookSeq = 0;
 std::string g_remoteLook;   // protegido por g_lock
 uint16_t g_remoteLookSeq = 0;
 constexpr double kLookSendInterval = 2.0;  // s
+std::vector<ZombieLook> g_outZombieLooks;           // host; protegido por g_lock
+std::map<uint32_t, ZombieLook> g_zombieLooks;       // cliente: id -> aparência; protegido por g_lock
+constexpr size_t kMaxZombieLooks = 512;
 volatile bool g_running = false;
 HANDLE g_thread = nullptr;
 
@@ -144,6 +147,7 @@ void sendZombies() {
             e.anim[sizeof(e.anim) - 1] = 0;
             memcpy(e.model, z.model, sizeof(e.model));
             e.model[sizeof(e.model) - 1] = 0;
+            e.lookHash = z.lookHash;
         }
         // Só as entradas usadas vão para a rede.
         send(&p, static_cast<int>(offsetof(ZombiesPacket, e) + p.count * sizeof(ZombieEntry)));
@@ -168,6 +172,7 @@ void handleZombies(const char* data, int size) {
         z.anim[sizeof(z.anim) - 1] = 0;
         memcpy(z.model, e.model, sizeof(z.model));
         z.model[sizeof(z.model) - 1] = 0;
+        z.lookHash = e.lookHash;
         auto it = g_remoteZombies.find(z.id);
         if (it == g_remoteZombies.end()) {
             RemoteZombie r;
@@ -329,6 +334,37 @@ void handleLook(const char* data) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void sendZombieLookPackets() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<ZombieLook> out;
+    out.swap(g_outZombieLooks);
+    ReleaseSRWLockExclusive(&g_lock);
+    for (const ZombieLook& l : out) {
+        ZombieLookPacket p = {};
+        fillHeader(p.h, PacketType::ZombieLook);
+        p.zombieId = l.id;
+        p.lookHash = l.hash;
+        const int n = snprintf(p.parts, sizeof(p.parts), "%s", l.parts.c_str());
+        const int used = n < 0 ? 0 : n < (int)sizeof(p.parts) ? n : (int)sizeof(p.parts) - 1;
+        send(&p, static_cast<int>(offsetof(ZombieLookPacket, parts)) + used + 1);
+    }
+}
+
+void handleZombieLook(const char* data, int size) {
+    ZombieLookPacket p = {};
+    memcpy(&p, data, size < (int)sizeof(p) ? size : sizeof(p));
+    p.parts[sizeof(p.parts) - 1] = 0;
+    if (!p.zombieId || !p.lookHash || !p.parts[0]) return;
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_zombieLooks.size() >= kMaxZombieLooks) {
+        // Esquece os zumbis que o host já não manda.
+        for (auto it = g_zombieLooks.begin(); it != g_zombieLooks.end();)
+            it = g_remoteZombies.count(it->first) ? std::next(it) : g_zombieLooks.erase(it);
+    }
+    if (g_zombieLooks.size() < kMaxZombieLooks) g_zombieLooks[p.zombieId] = {p.zombieId, p.lookHash, p.parts};
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void setConnected(bool connected, uint32_t peerId) {
     AcquireSRWLockExclusive(&g_lock);
     g_remote.connected = connected;
@@ -336,6 +372,7 @@ void setConnected(bool connected, uint32_t peerId) {
     if (!connected) {
         g_remote.state = PlayerState{};
         g_remoteZombies.clear();
+        g_zombieLooks.clear();
         g_haveHitSeq = false;  // o outro lado recomeça a sequência ao reabrir
         g_remoteLook.clear();
         g_remoteLookSeq = 0;
@@ -420,6 +457,11 @@ void handlePacket(const char* data, int size, const Address& from) {
     if (h.type == PacketType::Zombies && g_cfg.role == Role::Client &&
         size >= (int)offsetof(ZombiesPacket, e)) {
         handleZombies(data, size);
+        return;
+    }
+    if (h.type == PacketType::ZombieLook && g_cfg.role == Role::Client &&
+        size > (int)offsetof(ZombieLookPacket, parts)) {
+        handleZombieLook(data, size);
         return;
     }
     if (h.type == PacketType::Give && size >= (int)sizeof(GivePacket)) {
@@ -514,6 +556,7 @@ DWORD WINAPI netThread(LPVOID) {
         if (g_peerKnown) sendHits();
         if (g_peerKnown) sendContainerPackets();
         if (g_peerKnown) sendGives();
+        if (g_peerKnown && g_cfg.role == Role::Host) sendZombieLookPackets();
         static double nextSearched = 0;
         if (g_peerKnown && nowSec >= nextSearched) {
             sendSearched();
@@ -671,6 +714,22 @@ uint16_t getRemoteSearched(std::vector<uint8_t>& bits) {
     const uint16_t n = g_remoteSearchedCount;
     ReleaseSRWLockShared(&g_lock);
     return n;
+}
+
+void sendZombieLooks(const std::vector<ZombieLook>& looks) {
+    AcquireSRWLockExclusive(&g_lock);
+    for (const ZombieLook& l : looks)
+        if (g_outZombieLooks.size() < 64) g_outZombieLooks.push_back(l);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+bool getZombieLook(uint32_t id, uint32_t hash, std::string& parts) {
+    AcquireSRWLockShared(&g_lock);
+    auto it = g_zombieLooks.find(id);
+    const bool ok = it != g_zombieLooks.end() && it->second.hash == hash;
+    if (ok) parts = it->second.parts;
+    ReleaseSRWLockShared(&g_lock);
+    return ok;
 }
 
 void setLocalLook(const std::string& parts) {

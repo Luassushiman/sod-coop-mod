@@ -72,15 +72,11 @@ uint16_t g_appliedSeq = 0;    // aparência aplicada nele
 
 }  // namespace
 
-void updateLocal(bool settled, engine::EntityId localId) {
-    static double next = 0;
-    const double now = clock::seconds();
-    if (!settled || now < next) return;
-    next = now + kLocalInterval;
-    void* entity = engine::getEntity(localId);
+std::string describe(void* entity, int* count) {
+    if (count) *count = 0;
     std::vector<engine::SkinPart> parts;
     const std::string base = anim_watch::modelPath(entity);
-    if (!safePath(base) || !engine::listSkinParts(entity, parts)) return;
+    if (!safePath(base) || !engine::listSkinParts(entity, parts)) return {};
     std::string text = "base=" + base + ";";
     for (const engine::SkinPart& p : parts) {
         if (!safeName(p.name) || !safePath(p.path)) continue;
@@ -88,7 +84,37 @@ void updateLocal(bool settled, engine::EntityId localId) {
             p.name + "=" + p.path + (safeAsset(p.material) ? "|" + p.material : std::string()) + ";";
         if (text.size() + item.size() >= 1150) break;
         text += item;
+        if (count) ++*count;
     }
+    return text;
+}
+
+std::string baseModel(const std::string& look) {
+    const std::map<std::string, Part> want = parse(look);
+    auto it = want.find("base");
+    return it != want.end() && want.size() > 1 ? it->second.path : std::string();
+}
+
+int attachParts(void* entity, const std::string& look, int& failed) {
+    int added = 0;
+    failed = 0;
+    for (const auto& [name, part] : parse(look)) {
+        if (name == "base") continue;
+        if (engine::attachSkinPart(entity, name.c_str(), part.path.c_str(), part.material.c_str()))
+            ++added;
+        else
+            ++failed;
+    }
+    return added;
+}
+
+void updateLocal(bool settled, engine::EntityId localId) {
+    static double next = 0;
+    const double now = clock::seconds();
+    if (!settled || now < next) return;
+    next = now + kLocalInterval;
+    const std::string text = describe(engine::getEntity(localId));
+    if (text.empty()) return;
     static std::string last;
     if (text != last) {
         last = text;
@@ -100,9 +126,8 @@ void updateLocal(bool settled, engine::EntityId localId) {
 std::string puppetModel(const std::string& fallback) {
     std::string text;
     if (!net::getRemoteLook(text)) return fallback;
-    const std::map<std::string, Part> want = parse(text);
-    auto it = want.find("base");
-    return it != want.end() && want.size() > 1 ? it->second.path : fallback;
+    const std::string base = baseModel(text);
+    return base.empty() ? fallback : base;
 }
 
 void updatePuppet(bool settled) {
@@ -146,14 +171,8 @@ void updatePuppet(bool settled) {
         remote_player::respawn("aparencia recebida");
         return;
     }
-    int added = 0, failed = 0;
-    for (const auto& [name, part] : want) {
-        if (name == "base") continue;
-        if (engine::attachSkinPart(puppet, name.c_str(), part.path.c_str(), part.material.c_str()))
-            ++added;
-        else
-            ++failed;
-    }
+    int failed = 0;
+    const int added = attachParts(puppet, text, failed);
     log::info("aparencia: fantoche montado (%d parte(s), %d falha(s)): %s", added, failed, text.c_str());
 }
 

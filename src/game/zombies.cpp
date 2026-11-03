@@ -14,6 +14,7 @@
 #include "core/clock.h"
 #include "core/log.h"
 #include "game/anim_watch.h"
+#include "game/appearance.h"
 #include "game/puppet.h"
 #include "net/session.h"
 
@@ -24,6 +25,15 @@ constexpr float kPi = 3.14159265f;
 constexpr double kHostInterval = 0.1;       // s entre coletas no host
 constexpr double kClientCheckInterval = 10;  // s entre conferências de zumbis locais no cliente
 constexpr float kTeleportDistance = 10.0f;
+// Aparência (partes de pele) de cada zumbi: o host lê ao ver o zumbi e de tempos em tempos.
+constexpr double kLookReadInterval = 3.0;    // s entre releituras
+constexpr double kLookRetryInterval = 0.3;   // s, enquanto o jogo ainda não prendeu as partes
+constexpr double kLookResendInterval = 3.0;  // s entre reenvios ao cliente
+constexpr size_t kLookSendsPerTick = 4;
+// Cliente: espera a aparência antes de criar o fantoche (senão usa o modelo simplificado).
+constexpr double kLookWaitUnknown = 1.0;  // s, host ainda sem partes (lookHash 0)
+constexpr double kLookWait = 3.5;         // s, hash conhecido mas aparência ainda não chegou
+constexpr int kSpawnsPerFrame = 4;
 
 // Erros sobem com error(): o ExecuteBuffer devolve false e o C++ registra no log.
 constexpr const char* kLuaHelpers = R"lua(
@@ -172,9 +182,10 @@ function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
   return e ~= nil and System.GetEntity(e.id) ~= nil
 end
--- Cliente: fantoche de zumbi (AnimObject sem física), como o do jogador.
+-- Cliente: fantoche de zumbi (AnimObject sem física), como o do jogador. Devolve o
+-- EntityId do fantoche (as partes são presas pelo C++, pela entidade).
 function SodCoop.ZSpawn(id, model, x, y, z)
-  if SodCoop.ZAlive(id) then return end
+  if SodCoop.ZAlive(id) then return SodCoop.EId(SodCoop.zp[id]) end
   if AnimObject == nil then Script.ReloadScript("Scripts/Entities/Physics/AnimObject.lua") end
   local p = new(AnimObject.Properties)
   p.object_Model = model
@@ -186,6 +197,7 @@ function SodCoop.ZSpawn(id, model, x, y, z)
                                  position = { x = x, y = y, z = z }, properties = p })
   if not e then error("sodcoop: fantoche de zumbi nao criado") end
   SodCoop.zp[id] = e
+  return SodCoop.EId(e)
 end
 function SodCoop.ZRemove(id)
   if SodCoop.ZAlive(id) then System.RemoveEntity(SodCoop.zp[id].id) end
@@ -275,9 +287,24 @@ float wrapAngle(float a) {
     return a;
 }
 
+// FNV-1a; nunca 0 (0 = sem aparência).
+uint32_t hashText(const std::string& s) {
+    uint32_t h = 2166136261u;
+    for (unsigned char c : s) h = (h ^ c) * 16777619u;
+    return h ? h : 1;
+}
+
 // --- Host ------------------------------------------------------------------
 size_t g_lastHostCount = static_cast<size_t>(-1);
 bool g_chasing = false;  // SodCoop.zc pode ter zumbis conduzidos
+
+struct HostLook {
+    std::string text;  // "" = o jogo ainda não prendeu as partes
+    uint32_t hash = 0;
+    double nextRead = 0, nextSend = 0;
+    bool seen = false;  // na lista desta rodada
+};
+std::map<uint32_t, HostLook> g_hostLooks;  // EntityId do zumbi -> aparência
 
 // A cada frame: o mod conduz os zumbis perto do jogador do cliente (SodCoop.ZChase)
 // e manda ao cliente os golpes que acertaram.
@@ -317,9 +344,11 @@ void updateChase(const Config& cfg, double now, const engine::Vec3& self, bool o
 // --- Cliente ---------------------------------------------------------------
 struct Puppet {
     std::string anim;
-    engine::Vec3 pos{};  // posição desenhada no último frame
+    engine::Vec3 pos{};     // posição desenhada no último frame
+    uint32_t lookHash = 0;  // aparência montada (0 = modelo simplificado, sem a do host)
 };
 std::map<uint32_t, Puppet> g_puppets;  // EntityId do zumbi no host -> fantoche
+std::map<uint32_t, double> g_waitingLook;  // zumbi sem fantoche ainda -> desde quando espera a aparência
 bool g_clientWorld = false;  // já desligou os zumbis locais neste mundo
 double g_nextLocalCheck = 0;
 
@@ -355,6 +384,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
     if (!puppet::readLuaText(expr, names)) return;
 
     std::vector<net::ZombieState> list;
+    std::vector<net::ZombieLook> looks;
     size_t start = 0;
     while (start < names.size()) {
         size_t end = names.find(' ', start);
@@ -393,8 +423,38 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
             seenModels.push_back(model);
             log::info("zombies: modelo novo no host: %s (entidade %u)", model.c_str(), id);
         }
+        HostLook& look = g_hostLooks[id];
+        look.seen = true;
+        if (now >= look.nextRead) {
+            int parts = 0;
+            std::string text = appearance::describe(entity, &parts);
+            if (parts == 0) text.clear();
+            if (text != look.text) {
+                look.text = text;
+                look.hash = text.empty() ? 0 : hashText(text);
+                look.nextSend = 0;
+                static int logged = 0;
+                if (!text.empty() && ++logged <= 12)
+                    log::info("zombies: aparencia do zumbi %u (%d parte(s)): %s", id, parts, text.c_str());
+            }
+            look.nextRead = now + (text.empty() ? kLookRetryInterval : kLookReadInterval);
+        }
+        z.lookHash = look.hash;
+        if (otherValid && look.hash && now >= look.nextSend && looks.size() < kLookSendsPerTick) {
+            looks.push_back({id, look.hash, look.text});
+            look.nextSend = now + kLookResendInterval;
+        }
         list.push_back(z);
     }
+    for (auto it = g_hostLooks.begin(); it != g_hostLooks.end();) {
+        if (!it->second.seen) {
+            it = g_hostLooks.erase(it);
+            continue;
+        }
+        it->second.seen = false;
+        ++it;
+    }
+    if (!looks.empty()) net::sendZombieLooks(looks);
     if (list.size() != g_lastHostCount) {
         g_lastHostCount = list.size();
         log::info("zombies: host enviando %zu zumbi(s)%s%s", list.size(), list.empty() ? "" : ", ex.: ",
@@ -407,6 +467,7 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
     if (!inWorld) {
         // Nível descarregado: as entidades já não existem.
         g_puppets.clear();
+        g_waitingLook.clear();
         g_clientWorld = false;
         return;
     }
@@ -454,6 +515,9 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
         engine::executeLua(code, "sodcoop_zremove");
         it = g_puppets.erase(it);
     }
+    for (auto it = g_waitingLook.begin(); it != g_waitingLook.end();)
+        it = remote.count(it->first) ? std::next(it) : g_waitingLook.erase(it);
+    int spawns = 0;
 
     std::string moves = "SodCoop.ZMoveAll({";
     char buf[256];
@@ -470,17 +534,50 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
         const float x = a.pos[0] + dx * k, y = a.pos[1] + dy * k, z = a.pos[2] + dz * k;
         const float yaw = wrapAngle(a.yaw + wrapAngle(b.yaw - a.yaw) * k);
 
+        std::string look;
+        const bool haveLook = b.lookHash && net::getZombieLook(id, b.lookHash, look);
         auto it = g_puppets.find(id);
+        if (it != g_puppets.end() && haveLook && it->second.lookHash != b.lookHash && spawns < kSpawnsPerFrame) {
+            // A aparência chegou depois (fantoche com o modelo simplificado) ou mudou: tira o
+            // fantoche e cria outro no próximo frame (nunca troca partes de um personagem em uso).
+            ++spawns;
+            snprintf(buf, sizeof(buf), "SodCoop.ZRemove(%u)", id);
+            engine::executeLua(buf, "sodcoop_zremove");
+            log::info("zombies: aparencia nova do zumbi %u; recriando o fantoche", id);
+            g_puppets.erase(it);
+            continue;
+        }
         if (it == g_puppets.end()) {
-            const std::string model = puppetModel(b.model, cfg);
+            if (!haveLook) {
+                const double since = g_waitingLook.emplace(id, now).first->second;
+                if (now - since < (b.lookHash ? kLookWait : kLookWaitUnknown)) continue;
+            }
+            if (spawns >= kSpawnsPerFrame) continue;
+            ++spawns;
+            const std::string base = haveLook ? appearance::baseModel(look) : std::string();
+            const std::string model = base.empty() ? puppetModel(b.model, cfg) : base;
             snprintf(buf, sizeof(buf), "SodCoop.ZSpawn(%u, \"%s\", %.2f, %.2f, %.2f)", id, model.c_str(), x, y, z);
-            if (!engine::executeLua(buf, "sodcoop_zspawn")) {
+            std::string eid;
+            if (!puppet::readLuaText(buf, eid)) {
                 log::warn("zombies: fantoche do zumbi %u falhou", id);
                 continue;
             }
+            g_waitingLook.erase(id);
+            int added = 0, failed = 0;
+            if (!base.empty()) {
+                void* entity = engine::getEntity(static_cast<engine::EntityId>(strtoul(eid.c_str(), nullptr, 10)));
+                if (entity) added = appearance::attachParts(entity, look, failed);
+                else failed = -1;
+            }
             it = g_puppets.emplace(id, Puppet{}).first;
-            log::info("zombies: fantoche do zumbi %u criado com %s (host: %s; %zu no total)", id, model.c_str(),
-                      b.model, g_puppets.size());
+            // Com a aparência, não tenta de novo mesmo se alguma parte falhar (evita recriar em laço).
+            it->second.lookHash = haveLook ? b.lookHash : 0;
+            if (base.empty())
+                log::info("zombies: fantoche do zumbi %u criado com %s, sem a aparencia (host: %s; %zu no total)", id,
+                          model.c_str(), b.model, g_puppets.size());
+            else
+                log::info("zombies: fantoche do zumbi %u criado com a aparencia do host (%s, %d parte(s), %d falha(s); "
+                          "%zu no total)", id, model.c_str(), added, failed, g_puppets.size());
         }
         if (b.anim[0] && it->second.anim != b.anim && isIdentifier(b.anim)) {
             snprintf(buf, sizeof(buf), "SodCoop.ZAnim(%u, \"%s\", %s)", id, b.anim, b.loop ? "true" : "false");

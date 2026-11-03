@@ -356,6 +356,6 @@ Limitações:
 Pendências:
 - A fila tem 24 vagas para os dois jogadores: com muitos zumbis perto do client, os do host podem demorar a ativar (não observado).
 - Zumbis ativados longe do host ainda seguem a IA do jogo, que só persegue o host; quem os leva ao client é o `ZChase` (até `aggro_radius`, 10 m).
-- Partes e texturas dos zumbis no client (como o `Look` do jogador).
 - Golpe visível no host (fantoche no host).
 
+- **Aparência dos zumbis no client (resolvido, protocolo v23):** o host lê as partes de pele e os materiais de cada zumbi (`appearance::describe`, o mesmo do `Look` do jogador; ex.: mulher com `body`, `head`, `hair`... sobre `characters/female/zombie/skeleton/skeleton.chr`), relendo a cada 3 s (0,3 s enquanto o jogo ainda não prendeu as partes). Manda o texto no pacote `ZombieLook` e o hash dele em `ZombieEntry.lookHash`. O client espera a aparência (até 1 s; 3,5 s se o hash já é conhecido), cria o fantoche com o esqueleto do host e prende as partes (`appearance::attachParts`); sem ela, usa o modelo simplificado e recria o fantoche quando a aparência chega ou muda (nunca troca partes de um personagem em uso). No máximo 4 fantoches criados por frame. Confirmado pelo usuário: zumbis iguais nas duas telas (testado com poucos zumbis).

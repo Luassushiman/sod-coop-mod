@@ -69,6 +69,7 @@ struct ZombieState {
     float yaw = 0;
     char anim[32] = {};
     char model[64] = {};
+    uint32_t lookHash = 0;  // aparência (ZombieLook); 0 = ainda sem partes
 };
 
 // Último estado recebido de um zumbi, com o anterior para interpolar.
@@ -129,6 +130,17 @@ struct ContainerState {
 // Envia conteúdos ao outro lado (uma vez cada); recebidos desde a última chamada.
 void sendContainers(const std::vector<ContainerState>& list);
 std::vector<ContainerState> takeContainers();
+
+// Aparência de um zumbi do host ("base=esqueleto.chr;anexo=arquivo.chr|material;...").
+struct ZombieLook {
+    uint32_t id = 0;    // EntityId no host
+    uint32_t hash = 0;  // ZombieState.lookHash
+    std::string parts;
+};
+// Host: aparências a enviar (uma vez cada).
+void sendZombieLooks(const std::vector<ZombieLook>& looks);
+// Cliente: aparência recebida do zumbi `id` com esse hash; false se ainda não chegou.
+bool getZombieLook(uint32_t id, uint32_t hash, std::string& parts);
 
 // Aparência do jogador local ("anexo=arquivo;..."), enviada a cada 2 s.
 void setLocalLook(const std::string& parts);
