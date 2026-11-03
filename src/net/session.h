@@ -42,6 +42,9 @@ struct PlayerState {
     char aimPose[48] = {};    // ver StatePacket.aimPose
     bool dead = false;        // vida 0
     float timeOfDay = -1;     // hora do dia (0..24), -1 = desconhecida
+    char vehicle[32] = {};    // ver StatePacket.vehicle
+    float vehiclePos[3] = {};
+    float vehicleAngles[3] = {};
 };
 
 struct RemoteState {

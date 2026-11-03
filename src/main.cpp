@@ -29,6 +29,7 @@
 #include "game/remote_player.h"
 #include "game/appearance.h"
 #include "game/member_menu.h"
+#include "game/vehicles.h"
 #include "game/zombies.h"
 #include "net/session.h"
 
@@ -422,6 +423,7 @@ void onFrame() {
         mine.dead = settled && localDead(id);
         float hour;
         if (engine::getTimeOfDay(hour)) mine.timeOfDay = hour;
+        vehicles::fillLocal(settled, mine);
         // IK de mira do jogador (o nome da animação não indica a mira: o jogo
         // liga o IK por cima de _AIM_* e também de relaxed_idle_*).
         bool aimOn = false;
@@ -463,7 +465,15 @@ void onFrame() {
                   remote.state.hasPlayer, remote.state.pos[0], remote.state.pos[1], remote.state.pos[2],
                   remote.state.yaw, now - remote.receivedAtMs);
     }
-    remote_player::update(remote, settled, appearance::puppetModel(g_cfg.puppetModel), g_cfg.anim);
+    // Dentro de carro, quem posiciona e anima o fantoche é vehicles (no banco do motorista);
+    // remote_player só roda para criar o fantoche se ele ainda não existir.
+    // Nada que leia o Lua (puppet::entity) antes de settled: a entidade de texto criada
+    // durante o carregamento do nível fica "unremovable" e o motor reclama ao renomeá-la.
+    const bool remoteInVehicle = remote.connected && remote.state.hasPlayer && remote.state.vehicle[0];
+    if (settled && !remoteInVehicle && vehicles::needsPuppetRespawn()) remote_player::respawn("saiu do carro");
+    if (!settled || !remoteInVehicle || !puppet::entity())
+        remote_player::update(remote, settled, appearance::puppetModel(g_cfg.puppetModel), g_cfg.anim);
+    vehicles::updateRemote(remote, settled);
     appearance::updateLocal(settled, id);
     appearance::updatePuppet(settled && remote.connected && remote.state.hasPlayer);
 

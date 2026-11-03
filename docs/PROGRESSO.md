@@ -261,3 +261,16 @@ Limitações da etapa 3:
 
 - Visto uma vez: no client, o fantoche do host existia no lugar certo, visível, mas com o personagem recarregado (0 anexos: sem partes nem arma) logo depois de montado; só o esqueleto, que não aparece. Causa não achada (na mesma hora o client tinha sido levado de 2 km para o lado do host).
 - Proteção: a cada 2 s o mod confere se o fantoche montado ainda tem partes; se não tiver, registra `aparencia: fantoche perdeu as partes; recriando` e recria. No teste seguinte o problema não se repetiu.
+## Carros — etapa 1: carro do outro jogador (2026-11-03) ✅
+
+- O carro em que o jogador está vem de `actor:GetLinkedVehicleId()`; a entidade tem `.vehicle` e a classe é o tipo (ex.: `ULVEH00`, classe `Suv_New`). Os carros do mundo **não** são os mesmos nas duas cópias (no client não havia carro naquele ponto), então o outro lado cria o seu.
+- `State` leva `vehicle` (classe), `vehiclePos` e `vehicleAngles` (protocolo v18). Quem recebe cria um carro da mesma classe (`System.SpawnEntity`, nome `sodcoop_vehicle`) com a física desligada (`EnablePhysics(false)`: com física ele flutuava/quicava) e o move a cada frame, interpolado 0,1 s atrás. Ao sair, o carro some depois de 0,5 s.
+- Motorista: a posição do jogador (que o jogo põe no banco) relativa ao carro, nos eixos do carro, vira o lugar do fantoche; ele gira com o carro e fica na pose `Vehicle_truck_steer` (t 0,5, volante reto), a animação do jogador dirigindo. Ao sair, o fantoche é recriado em pé.
+- Correção no caminho: com o host já no carro e o client carregando o mundo, o mod lia o Lua antes de `settled` e o motor avisou "Unremovable entities should never change their name"; agora espera o mundo pronto.
+- Teste: host dirigindo um `Suv_New`; no client o carro andou junto e o host apareceu sentado ao volante; ao sair, voltou em pé e o carro sumiu. Confirmado pelo usuário.
+
+Limitações da etapa 1:
+- O carro só existe enquanto o outro jogador está dentro: quando ele estaciona e sai, o carro some do outro lado.
+- O carro de verdade do outro lado não se move (se existir lá, fica no lugar).
+- Só o motorista: o outro jogador não pode entrar no carro como passageiro; sem portas, luzes, dano nem som.
+- O volante fica parado (pose fixa); as rodas não giram.
