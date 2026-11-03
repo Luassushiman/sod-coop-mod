@@ -50,6 +50,7 @@ Config loadConfig() {
                           sscanf(sp.c_str(), "%f , %f , %f", &c.startPos[0], &c.startPos[1], &c.startPos[2]) == 3;
     }
     c.playerInvisible = GetPrivateProfileIntW(L"debug", L"player_invisible", 0, ini.c_str()) != 0;
+    c.godMode = GetPrivateProfileIntW(L"debug", L"god_mode", 0, ini.c_str()) != 0;
     c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 1, ini.c_str()) != 0;
     c.puppetModel = readString(ini, L"puppet", L"model", c.puppetModel);
     c.zombies.enabled = GetPrivateProfileIntW(L"zombies", L"enabled", 1, ini.c_str()) != 0;

@@ -52,6 +52,9 @@ struct Config {
     // [debug] player_invisible=1 (teste): zm_playerInvisible 1 ao entrar no mundo (os zumbis
     // ignoram o jogador local; o comando do jogo não fica salvo).
     bool playerInvisible = false;
+    // [debug] god_mode=1 (teste): o jogador local não morre (invulnerabilidade do jogo e vida
+    // cheia de novo sempre que baixar). Para o host nos testes: morrer encerra a partida do save.
+    bool godMode = false;
     // [puppet] modelo do fantoche (jogador remoto) e espelho local de teste
     zombies::Config zombies;               // [zombies] enabled, radius, model
     std::string puppetModel = "characters/male/human/body/tshirt_jeans/variant/v01.cdf";  // model

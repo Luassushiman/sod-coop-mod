@@ -205,11 +205,26 @@ void runCommandFile(DWORD now) {
 void spawnNearHost(bool settled, const engine::Vec3& self, const net::RemoteState& remote, DWORD now) {
     static bool done = false;
     static DWORD settledSince = 0;
+    static bool haveLast = false;
+    static engine::Vec3 last{};
     if (!settled) {
         done = false;
         settledSince = 0;
+        haveLast = false;
         return;
     }
+    // Salto grande de um frame para o outro: o jogo pôs o jogador em outro lugar (ao morrer de
+    // verdade, ele renasce no ponto inicial do mapa, visto em 2026-11-03). Leva de novo ao host.
+    if (haveLast) {
+        const float jx = self.x - last.x, jy = self.y - last.y;
+        if (jx * jx + jy * jy > 80.0f * 80.0f) {
+            log::info("spawn: jogador local saltou %.0f m (renasceu?); de volta ao host", std::sqrt(jx * jx + jy * jy));
+            done = false;
+            settledSince = now;
+        }
+    }
+    last = self;
+    haveLast = true;
     if (done) return;
     if (!settledSince) settledSince = now;
     if (now - settledSince > 60000) {  // host não apareceu no primeiro minuto: desiste
@@ -246,6 +261,12 @@ void applyTestStart(bool settled, const engine::Vec3& self, DWORD now) {
     if (g_cfg.playerInvisible) {
         const bool ok = engine::executeLua("System.ExecuteCommand(\"zm_playerInvisible 1\")", "sodcoop_invisible");
         log::info("teste: zm_playerInvisible 1 -> %s", ok ? "OK" : "FALHOU");
+    }
+    if (g_cfg.godMode) {
+        const bool ok = engine::executeLua(
+            "local g = g_gameRules and g_gameRules.game; if g then g:SetInvulnerability(g_localActorId, true) end",
+            "sodcoop_god");
+        log::info("teste: SetInvulnerability -> %s", ok ? "OK" : "FALHOU");
     }
     if (g_cfg.startPosValid) {
         const float* p = g_cfg.startPos;
@@ -539,6 +560,17 @@ void onFrame() {
     appearance::updatePuppet(settled && remote.connected && remote.state.hasPlayer);
 
     applyTestStart(settled, s.pos, now);
+    // [debug] god_mode: vida cheia de novo sempre que baixar (só vivo: SetHealth(> 0) num ator
+    // com vida 0 fecha o jogo).
+    static DWORD nextGod = 0;
+    if (g_cfg.godMode && settled && now >= nextGod) {
+        nextGod = now + 200;
+        engine::executeLua(
+            "local a = g_localActor; if a and a.actor and not a:IsDead() then local h = a.actor:GetHealth(); "
+            "local ok, m = pcall(a.actor.GetMaxHealth, a.actor); "
+            "if ok and m and h > 0 and h < m then a.actor:SetHealth(m) end end",
+            "sodcoop_godhp");
+    }
     // Zumbis: o host manda os dele; o cliente desliga os próprios e mostra os do host.
     if (g_cfg.net.role == net::Role::Host) {
         const engine::Vec3 other{remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]};

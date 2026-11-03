@@ -85,6 +85,9 @@ function SodCoop.ZDamage(id, dmg)
   if not z or not z.actor then return "sem zumbi" end
   if z:IsDead() then return "ja morto" end
   local h = z.actor:GetHealth()
+  -- SetHealth(> 0) num ator com vida 0 fecha o jogo (_exit(1) em 0x0138C980): IsDead() ainda
+  -- pode dar falso logo depois da morte.
+  if h <= 0 then return "ja morto (vida 0)" end
   if h - dmg <= 0 then
     z:Kill(true, g_localActorId, NULL_ENTITY, false, false)
     return string.format("morto (%.0f -> 0)", h)
@@ -193,11 +196,13 @@ end
 -- Cliente: golpe de zumbi do host no jogador local. O golpe fatal não mata: deixa o
 -- jogador "caído" (vida 1; o C++ avisa o host e, depois, o leva para o lado do host com a
 -- vida cheia). A morte de verdade (Kill) deixava o save do client como partida encerrada.
-function SodCoop.PlayerHurt(dmg)
+-- zx, zy: posição do zumbi (fantoche); escolhe a reação de frente ou de costas.
+function SodCoop.PlayerHurt(dmg, zx, zy)
   local a = g_localActor
   if not a or not a.actor then return "sem jogador" end
   if a:IsDead() then return "ja morto" end
   local h = a.actor:GetHealth()
+  if h <= 0 then return "ja morto (vida 0)" end  -- ver SodCoop.ZDamage
   if h - dmg <= 0 then
     a.actor:SetHealth(1)
     if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 1.5, 0.6, 0.15, a:GetWorldPos()) end
@@ -205,13 +210,40 @@ function SodCoop.PlayerHurt(dmg)
   end
   a.actor:SetHealth(h - dmg)
   if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 0.5, 0.25, 0.1, a:GetWorldPos()) end
+  -- Reação ao golpe (as mesmas que o jogo toca no jogador do host; testada em 2026-11-03).
+  -- Só parado ou andando devagar: correndo, a reação toma o lugar da corrida e o personagem
+  -- desliza até ela acabar (2026-11-03).
+  local okv, v = pcall(a.GetVelocity, a)
+  local slow = okv and v and (v.x * v.x + v.y * v.y) < 1.5 * 1.5
+  if zx and slow then
+    local p, yaw = a:GetWorldPos(), a:GetWorldAngles().z
+    local front = (zx - p.x) * -math.sin(yaw) + (zy - p.y) * math.cos(yaw) >= 0
+    pcall(a.StartAnimation, a, 0, front and "React_mid_front" or "React_mid_back", 0, 0.1, 1, false)
+  end
   return string.format("vida %.0f -> %.0f", h, h - dmg)
 end
 -- Cliente: impacto do golpe do jogador local no fantoche id, sem esperar o host: o fantoche
 -- reage na hora e a câmera treme de leve.
+-- Sangue e som: os efeitos que o jogo usa nos zumbis (nomes lidos na memória do host, 2026-11-03).
+SodCoop.zHitFx = { melee = "Class3Melee.fleshie", shot = "Class3Bullets.zed_hits.flesh_small" }
+SodCoop.zHitSound = "Sounds/combat:mle_zed:flesh_blood_spray"
 function SodCoop.ZHitFeedback(id, melee)
-  if SodCoop.ZAlive(id) then SodCoop.zp[id]:StartAnimation(0, SodCoop.zReact, 0, 0.1, 1, false) end
   local a = g_localActor
+  if SodCoop.ZAlive(id) then
+    local z = SodCoop.zp[id]
+    z:StartAnimation(0, SodCoop.zReact, 0, 0.1, 1, false)
+    local zp = z:GetWorldPos()
+    local pos = { x = zp.x, y = zp.y, z = zp.z + 1.3 }
+    local dir = { x = 0, y = 0, z = 1 }
+    if a then
+      local p = a:GetWorldPos()
+      local dx, dy = zp.x - p.x, zp.y - p.y
+      local d = math.sqrt(dx * dx + dy * dy)
+      if d > 0.01 then dir = { x = dx / d, y = dy / d, z = 0 } end
+    end
+    pcall(Particle.SpawnEffect, melee and SodCoop.zHitFx.melee or SodCoop.zHitFx.shot, pos, dir, 1)
+    if melee then pcall(Sound.Play, SodCoop.zHitSound, pos, 0, 0) end
+  end
   if melee and a and a.actor and a.actor.CameraShake then
     pcall(a.actor.CameraShake, a.actor, 0.7, 0.2, 0.1, a:GetWorldPos())
   end
@@ -220,11 +252,23 @@ end
 function SodCoop.PlayerRise(x, y, z)
   local a = g_localActor
   if not a or not a.actor then return "sem jogador" end
+  if a:IsDead() or a.actor:GetHealth() <= 0 then return "morto: nao mexe na vida" end  -- ver SodCoop.ZDamage
   local ok, maxh = pcall(a.actor.GetMaxHealth, a.actor)
   if not ok or not maxh or maxh <= 0 then maxh = 100 end
   a.actor:SetHealth(maxh)
   a:SetWorldPos({ x = x, y = y, z = z })
   return string.format("vida %.0f", maxh)
+end
+-- Cliente: assistência de golpe (o jogo faz isso só com zumbis de verdade): vira o jogador
+-- local para o zumbi em (x, y). Sem avançar: puxar o jogador para o zumbi o punha dentro
+-- dos zumbis em volta (2026-11-03).
+function SodCoop.MeleeAssist(x, y)
+  local a = g_localActor
+  if not a then return end
+  local p = a:GetWorldPos()
+  local dx, dy = x - p.x, y - p.y
+  if dx * dx + dy * dy < 0.0025 then return end
+  a:SetWorldAngles({ x = 0, y = 0, z = math.atan2(-dx, dy) })
 end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
@@ -509,6 +553,8 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         if (hit.kind > 1) continue;
         char expr[96];
         snprintf(expr, sizeof(expr), "SodCoop.ZDamage(%u, %.1f)", hit.zombieId, hit.damage);
+        // Antes de aplicar: se o jogo fechar dentro do ZDamage, o log mostra em qual zumbi.
+        log::info("zombies: aplicando golpe do cliente no zumbi %u", hit.zombieId);
         std::string result;
         puppet::readLuaText(expr, result);
         log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: %s", hit.kind ? "tiro" : "corpo a corpo",
@@ -642,8 +688,13 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
 
     for (const net::HitEvent& hit : net::takeHits()) {
         if (hit.kind != 2 || g_downUntil > 0) continue;  // caído: os golpes não contam
-        char expr[64];
-        snprintf(expr, sizeof(expr), "SodCoop.PlayerHurt(%.1f)", hit.damage);
+        char expr[96];
+        auto zp = g_puppets.find(hit.zombieId);
+        if (zp != g_puppets.end())
+            snprintf(expr, sizeof(expr), "SodCoop.PlayerHurt(%.1f, %.2f, %.2f)", hit.damage, zp->second.pos.x,
+                     zp->second.pos.y);
+        else
+            snprintf(expr, sizeof(expr), "SodCoop.PlayerHurt(%.1f)", hit.damage);
         std::string result;
         puppet::readLuaText(expr, result);
         log::info("zombies: zumbi %u do host golpeou o jogador (%.0f): %s", hit.zombieId, hit.damage, result.c_str());
@@ -808,8 +859,10 @@ bool clientRise(const engine::Vec3& host) {
 void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,
                    const engine::Vec3& aimDir) {
     if (!cfg.enabled || g_puppets.empty()) return;
-    constexpr float kMeleeRange = 2.8f;     // m, horizontal
-    constexpr float kMeleeCos = 0.34f;      // ~70 graus para cada lado
+    // Assistência de golpe: acha o zumbi até 3,5 m e ~80 graus para cada lado e vira o jogador
+    // para ele (SodCoop.MeleeAssist), como o jogo faz no host.
+    constexpr float kMeleeRange = 3.5f;     // m, horizontal
+    constexpr float kMeleeCos = 0.17f;      // ~80 graus para cada lado
     constexpr float kShotRange = 60.0f;     // m
     constexpr float kShotRadius = 1.0f;     // m da linha da mira ao centro do zumbi
     constexpr float kChest = 1.4f, kZombieCenter = 1.0f;
@@ -839,6 +892,12 @@ void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self,
     if (bestScore >= 1e9f) {
         log::info("zombies: %s do cliente nao acertou nenhum zumbi", kind == AttackKind::Melee ? "golpe" : "tiro");
         return;
+    }
+    if (kind == AttackKind::Melee) {
+        const engine::Vec3& zp = g_puppets[best].pos;
+        char code[96];
+        snprintf(code, sizeof(code), "SodCoop.MeleeAssist(%.2f, %.2f)", zp.x, zp.y);
+        engine::executeLua(code, "sodcoop_assist");
     }
     net::HitEvent hit;
     hit.zombieId = best;
