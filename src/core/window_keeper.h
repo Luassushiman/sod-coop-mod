@@ -1,7 +1,7 @@
 // Mantém a janela do jogo numa posição/tamanho fixos (ambiente de teste com
 // duas instâncias lado a lado). O jogo redimensiona a própria janela ao abrir
 // e ao carregar; uma thread confere a cada segundo e corrige quando o tamanho
-// muda. Se o usuário só arrastar a janela, ela fica onde ele deixou.
+// ou a posição mudam.
 #pragma once
 
 namespace sodcoop::window_keeper {

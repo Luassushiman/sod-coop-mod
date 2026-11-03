@@ -46,6 +46,9 @@ struct PlayerState {
     float vehiclePos[3] = {};
     float vehicleAngles[3] = {};
     uint32_t vehicleId = 0;
+    char vehicleName[32] = {};  // ver StatePacket.vehicleName
+    uint32_t passengerOf = 0;  // ver StatePacket.passengerOf
+    uint8_t passengerSeat = 0;  // ver StatePacket.passengerSeat
 };
 
 struct RemoteState {

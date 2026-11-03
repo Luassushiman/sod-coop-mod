@@ -362,6 +362,20 @@ void onFrame() {
         log::info("cvars: sys_MaxFPS=%d -> %s", g_cfg.maxFps, ok ? "OK" : "FALHOU");
         fpsApplied = true;
     }
+    static bool videoApplied = false;
+    if (!videoApplied && g_cfg.window.enabled()) {
+        // Resolução do jogo = área interna da janela fixa (borda do Windows: 16 x 39 px).
+        // Sem isto o jogo volta à resolução salva (1920x1080, cobrindo a tela) e briga
+        // com o window_keeper.
+        char code[160];
+        snprintf(code, sizeof(code),
+                 "System.SetCVar(\"r_Fullscreen\", 0); System.SetCVar(\"r_Width\", %d); System.SetCVar(\"r_Height\", %d)",
+                 g_cfg.window.width - 16, g_cfg.window.height - 39);
+        bool ok = engine::executeLua(code, "sodcoop_video");
+        log::info("cvars: r_Fullscreen=0 r_Width=%d r_Height=%d -> %s", g_cfg.window.width - 16,
+                  g_cfg.window.height - 39, ok ? "OK" : "FALHOU");
+        videoApplied = true;
+    }
     engine::EntityId id = local_player::currentId();
     if (id != lastId) {
         lastId = id;
@@ -465,11 +479,11 @@ void onFrame() {
                   remote.state.hasPlayer, remote.state.pos[0], remote.state.pos[1], remote.state.pos[2],
                   remote.state.yaw, now - remote.receivedAtMs);
     }
-    // Dentro de carro, quem posiciona e anima o fantoche é vehicles (no banco do motorista);
+    // Dentro de carro, quem posiciona e anima o fantoche é vehicles (motorista ou passageiro);
     // remote_player só roda para criar o fantoche se ele ainda não existir.
     // Nada que leia o Lua (puppet::entity) antes de settled: a entidade de texto criada
     // durante o carregamento do nível fica "unremovable" e o motor reclama ao renomeá-la.
-    const bool remoteInVehicle = remote.connected && remote.state.hasPlayer && remote.state.vehicle[0];
+    const bool remoteInVehicle = vehicles::remoteSeated(remote);
     if (settled && !remoteInVehicle && vehicles::needsPuppetRespawn()) remote_player::respawn("saiu do carro");
     if (!settled || !remoteInVehicle || !puppet::entity())
         remote_player::update(remote, settled, appearance::puppetModel(g_cfg.puppetModel), g_cfg.anim);

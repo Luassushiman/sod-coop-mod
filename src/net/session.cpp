@@ -103,6 +103,10 @@ void sendState() {
     memcpy(p.vehiclePos, g_local.vehiclePos, sizeof(p.vehiclePos));
     memcpy(p.vehicleAngles, g_local.vehicleAngles, sizeof(p.vehicleAngles));
     p.vehicleId = g_local.vehicleId;
+    memcpy(p.vehicleName, g_local.vehicleName, sizeof(p.vehicleName));
+    p.vehicleName[sizeof(p.vehicleName) - 1] = 0;
+    p.passengerOf = g_local.passengerOf;
+    p.passengerSeat = g_local.passengerSeat;
     ReleaseSRWLockShared(&g_lock);
     send(&p, sizeof(p));
 }
@@ -354,6 +358,10 @@ void handlePacket(const char* data, int size, const Address& from) {
         memcpy(g_remote.state.vehiclePos, p.vehiclePos, sizeof(p.vehiclePos));
         memcpy(g_remote.state.vehicleAngles, p.vehicleAngles, sizeof(p.vehicleAngles));
         g_remote.state.vehicleId = p.vehicleId;
+        memcpy(g_remote.state.vehicleName, p.vehicleName, sizeof(p.vehicleName));
+        g_remote.state.vehicleName[sizeof(g_remote.state.vehicleName) - 1] = 0;
+        g_remote.state.passengerOf = p.passengerOf;
+        g_remote.state.passengerSeat = p.passengerSeat;
         g_remote.receivedAtMs = g_lastRecvMs;
         g_remote.receivedAtSec = clock::seconds();
         g_remote.senderTimeMs = p.timeMs;

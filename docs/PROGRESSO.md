@@ -283,5 +283,27 @@ Limitações da etapa 1:
 - Teste: host entrou num `Suv_New`, saiu e voltou ao mesmo; no client o carro ficou estacionado e, na volta, só havia um carro (log: "dirigindo o carro 130828 (Suv_New), o mesmo de antes"). Confirmado pelo usuário.
 
 Limitações:
-- Estacionado só do lado de quem vê; o carro continua não sendo o mesmo carro do mundo (não salva, não aparece depois de recarregar).
-- O client não pode dirigir o carro estacionado do host (é uma entidade criada pelo mod; não testado).
+- ~~O carro continua não sendo o mesmo carro do mundo~~: com o save copiado, passou a ser (etapa 3).
+- O client não pode dirigir o carro estacionado do host (não testado).
+
+## Carros — etapa 3: passageiro no carro do outro jogador (2026-11-03) ✅
+
+- **Mesmo carro dos dois lados:** com o save copiado (`-SyncSave`), o carro do host também existe no mundo do client, com o mesmo **nome** de entidade (ex.: `ULVEH00`) e a mesma classe, mas com **outro id**. `State.vehicleName` (protocolo v20) leva o nome; quem recebe procura até 30 m um carro com essa classe e esse nome (`SodCoop.FindSameCar`) e o usa (`sodcoopBorrowed`) em vez de criar um. Ao desconectar, o carro usado só volta a ter física (não é removido).
+- Logo depois de o client entrar no mundo, o carro igual ainda não aparece em `GetEntitiesInSphere`: o mod cria um, procura de novo a cada ~1 s (até 30 vezes) e troca o criado pelo carro igual quando o encontra.
+- Sem isso havia dois carros no mesmo lugar: o client entrava no do mundo dele e o host criava uma cópia. Uma tentativa intermediária (esconder o "gêmeo" num raio de 4 m) falhou: no client o gêmeo estava a 4,1 m, e no host a regra escondeu o próprio carro do host.
+- **Entrar:** o client usa a tecla normal de usar. Entrando pela porta do passageiro com o volante vazio (no client, o host não está de verdade no carro), o jogo desliza o jogador para o volante (`Vehicle_truck_scooch_passenger_driver`, ~1,5 s depois). O mod devolve: `vehicle:ChangeSeat(id, 2, false)`. **`ChangeSeat` recebe uma escolha, não o número do assento**: 2 levou do assento 1 (volante) para o 3 (ao lado); `ChangeSeat(id, 3)` não fez nada. Apertar "usar" já como passageiro também desliza para o volante.
+- Passageiro no carro do outro: o client vai junto sem nada do mod (o jogo move o passageiro com o carro, mesmo sem física e movido por `SetWorldPos`). `State.passengerOf` = id (no host) do carro e `State.passengerSeat` = assento.
+- **Posição do passageiro:** com o jogador sentado, `GetWorldPos` do ator fica no ponto do **motorista** em qualquer assento (o client aparecia em cima do host). Por isso o host não usa a posição do client: o banco do passageiro é o do próprio motorista espelhado no eixo lateral (Suv_New: motorista −0,42; 0,48; 1,0 m nos eixos do carro; passageiro medido logo ao entrar: 0,45; 0,46).
+- Pose do fantoche: `Vehicle_pickupold_passenger_idle` (nomes = `Vehicle_` + arquivo em `animations/characters/hero_male/vehicle/`). Ao sair, o fantoche é recriado em pé.
+- `Seats[i].seat` tem `SetPassenger`, mas não grava um não-ator (o fantoche); `GetSeatPos` devolve nil. Os scripts de veículo do `gamedata.pak` não abrem (`zipfile` dá erro de dados: pak protegido).
+- Teste final (versão instalada, do zero): host no carro antes de o client carregar; o client começou com carro criado, trocou pelo `ULVEH00` dele, entrou pela tecla de usar, foi para o assento 3, andou junto e saiu normal; no host o fantoche ficou sentado ao lado do motorista. Confirmado pelo usuário.
+
+Limitações:
+- Bancos de trás (2, 4, 5) não medidos: no host o fantoche vai sempre para o banco da frente.
+- Só o client como passageiro do host foi testado (o contrário usa o mesmo código).
+- Para os testes, a perseguição de zumbis ao client está desligada no `sodcoop.ini` do host (`[zombies] chase=0`).
+
+## Janelas (2026-11-03)
+
+- O jogo voltava à resolução salva (1920×1080 a partir de 0,0, parecendo tela cheia) e o `window_keeper` o trazia de volta; o client precisava de Alt+Tab. Agora o mod aplica `r_Fullscreen=0` e `r_Width`/`r_Height` = área interna da janela (`[window]` − borda de 16×39 px) ao iniciar. Trocar a resolução com o jogo aberto funcionou sem fechar.
+- Ao aplicar a resolução, o jogo centraliza a janela sem mudar o tamanho; o `window_keeper` agora corrige também a posição (antes só o tamanho), para as duas ficarem no topo, lado a lado.

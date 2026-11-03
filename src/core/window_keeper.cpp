@@ -26,10 +26,12 @@ DWORD WINAPI keeperThread(LPVOID) {
         if (!hwnd || IsIconic(hwnd)) continue;
         RECT r;
         GetWindowRect(hwnd, &r);
-        // Só corrige quando o TAMANHO muda (o jogo redimensiona ao abrir/carregar).
-        // Movimento puro é do usuário arrastando a janela: não brigar com ele,
-        // e não forçar redimensionamentos repetidos no meio da criação do swapchain.
-        if (r.right - r.left == g_rect.width && r.bottom - r.top == g_rect.height) continue;
+        // Corrige quando o tamanho ou a posição mudam: o jogo redimensiona ao abrir/carregar
+        // e centraliza a janela ao aplicar r_Width/r_Height. O usuário quer as duas sempre
+        // no topo, lado a lado. Só age quando há diferença, então não repete à toa.
+        if (r.left == g_rect.x && r.top == g_rect.y && r.right - r.left == g_rect.width &&
+            r.bottom - r.top == g_rect.height)
+            continue;
         // ASYNC: não bloqueia esta thread esperando a thread de janela do jogo.
         SetWindowPos(hwnd, nullptr, g_rect.x, g_rect.y, g_rect.width, g_rect.height,
                      SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
