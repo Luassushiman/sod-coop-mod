@@ -101,6 +101,24 @@ void sendHit(const HitEvent& hit);
 // Golpes recebidos desde a última chamada.
 std::vector<HitEvent> takeHits();
 
+// Lugares de busca vasculhados (bit por nó), enviados a cada 1 s. nodeCount 0 = desconhecido.
+void setLocalSearched(uint16_t nodeCount, const std::vector<uint8_t>& bits);
+// Último recebido; devolve nodeCount (0 = nada ainda).
+uint16_t getRemoteSearched(std::vector<uint8_t>& bits);
+
+// Conteúdo de um lugar vasculhado (ver ContainerPacket).
+struct ContainerState {
+    int32_t node = -1;
+    uint32_t version = 0;
+    uint32_t count = 0;
+    uint32_t ids[16] = {};
+    uint8_t counts[16] = {};
+    uint8_t types[16] = {};
+};
+// Envia conteúdos ao outro lado (uma vez cada); recebidos desde a última chamada.
+void sendContainers(const std::vector<ContainerState>& list);
+std::vector<ContainerState> takeContainers();
+
 // Aparência do jogador local ("anexo=arquivo;..."), enviada a cada 2 s.
 void setLocalLook(const std::string& parts);
 // Última aparência recebida do outro lado; devolve a sequência (0 = nenhuma).

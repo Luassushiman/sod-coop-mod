@@ -25,6 +25,7 @@
 #include "game/engine.h"
 #include "game/frame.h"
 #include "game/local_player.h"
+#include "game/loot.h"
 #include "game/puppet.h"
 #include "game/remote_player.h"
 #include "game/appearance.h"
@@ -459,6 +460,7 @@ void onFrame() {
     net::setLocalState(mine);
     memberSwitchKeys(settled, mine.dead);
     member_menu::update(g_cfg.nextMemberKey, settled, mine.dead);
+    loot::update(settled && net::getRemoteState().connected, g_cfg.net.role == net::Role::Host);
 
     const bool logNow = now - lastLog >= (DWORD)g_cfg.positionLogIntervalMs;
     if (logNow) {

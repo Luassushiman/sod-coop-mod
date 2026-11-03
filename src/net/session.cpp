@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <mmsystem.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -36,6 +37,12 @@ std::vector<HitEvent> g_inHits;    // recebidos; protegido por g_lock
 uint16_t g_hitSeq = 0;             // thread de rede
 uint16_t g_lastHitSeq = 0;         // último recebido (thread de rede)
 bool g_haveHitSeq = false;
+std::vector<ContainerState> g_outContainers;  // protegido por g_lock
+std::vector<ContainerState> g_inContainers;   // protegido por g_lock
+uint16_t g_localSearchedCount = 0;    // protegido por g_lock
+std::vector<uint8_t> g_localSearched;  // protegido por g_lock
+uint16_t g_remoteSearchedCount = 0;   // protegido por g_lock
+std::vector<uint8_t> g_remoteSearched;  // protegido por g_lock
 std::string g_localLook;    // protegido por g_lock
 uint16_t g_localLookSeq = 0;
 std::string g_remoteLook;   // protegido por g_lock
@@ -207,6 +214,60 @@ void handleHit(const char* data) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void sendSearched() {
+    SearchedPacket p = {};
+    AcquireSRWLockShared(&g_lock);
+    p.nodeCount = g_localSearchedCount;
+    memcpy(p.bits, g_localSearched.data(), std::min(g_localSearched.size(), sizeof(p.bits)));
+    ReleaseSRWLockShared(&g_lock);
+    if (!p.nodeCount) return;
+    fillHeader(p.h, PacketType::Searched);
+    send(&p, sizeof(p));
+}
+
+void sendContainerPackets() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<ContainerState> out;
+    out.swap(g_outContainers);
+    ReleaseSRWLockExclusive(&g_lock);
+    for (const ContainerState& c : out) {
+        ContainerPacket p = {};
+        p.node = c.node;
+        p.version = c.version;
+        p.count = c.count;
+        memcpy(p.ids, c.ids, sizeof(p.ids));
+        memcpy(p.counts, c.counts, sizeof(p.counts));
+        memcpy(p.types, c.types, sizeof(p.types));
+        fillHeader(p.h, PacketType::Container);
+        send(&p, sizeof(p));
+    }
+}
+
+void handleContainer(const char* data) {
+    ContainerPacket p;
+    memcpy(&p, data, sizeof(p));
+    if (p.node < 0 || p.count > kContainerSlots) return;
+    ContainerState c;
+    c.node = p.node;
+    c.version = p.version;
+    c.count = p.count;
+    memcpy(c.ids, p.ids, sizeof(c.ids));
+    memcpy(c.counts, p.counts, sizeof(c.counts));
+    memcpy(c.types, p.types, sizeof(c.types));
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_inContainers.size() < 256) g_inContainers.push_back(c);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+void handleSearched(const char* data) {
+    SearchedPacket p;
+    memcpy(&p, data, sizeof(p));
+    AcquireSRWLockExclusive(&g_lock);
+    g_remoteSearchedCount = p.nodeCount;
+    g_remoteSearched.assign(p.bits, p.bits + sizeof(p.bits));
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void sendLook() {
     LookPacket p = {};
     AcquireSRWLockShared(&g_lock);
@@ -240,6 +301,9 @@ void setConnected(bool connected, uint32_t peerId) {
         g_haveHitSeq = false;  // o outro lado recomeça a sequência ao reabrir
         g_remoteLook.clear();
         g_remoteLookSeq = 0;
+        g_remoteSearchedCount = 0;
+        g_remoteSearched.clear();
+        g_inContainers.clear();
     }
     ReleaseSRWLockExclusive(&g_lock);
 }
@@ -317,6 +381,14 @@ void handlePacket(const char* data, int size, const Address& from) {
     if (h.type == PacketType::Zombies && g_cfg.role == Role::Client &&
         size >= (int)offsetof(ZombiesPacket, e)) {
         handleZombies(data, size);
+        return;
+    }
+    if (h.type == PacketType::Container && size >= (int)sizeof(ContainerPacket)) {
+        handleContainer(data);
+        return;
+    }
+    if (h.type == PacketType::Searched && size >= (int)sizeof(SearchedPacket)) {
+        handleSearched(data);
         return;
     }
     if (h.type == PacketType::Look && size >= (int)sizeof(LookPacket)) {
@@ -397,6 +469,12 @@ DWORD WINAPI netThread(LPVOID) {
             nextSend = (nowSec - nextSend > sendInterval) ? nowSec + sendInterval : nextSend + sendInterval;
         }
         if (g_peerKnown) sendHits();
+        if (g_peerKnown) sendContainerPackets();
+        static double nextSearched = 0;
+        if (g_peerKnown && nowSec >= nextSearched) {
+            sendSearched();
+            nextSearched = nowSec + 1.0;
+        }
         static double nextLook = 0;
         if (g_peerKnown && nowSec >= nextLook) {
             sendLook();
@@ -505,6 +583,36 @@ std::map<uint32_t, RemoteZombie> getRemoteZombies() {
     std::map<uint32_t, RemoteZombie> copy = g_remoteZombies;
     ReleaseSRWLockExclusive(&g_lock);
     return copy;
+}
+
+void sendContainers(const std::vector<ContainerState>& list) {
+    AcquireSRWLockExclusive(&g_lock);
+    for (const ContainerState& c : list)
+        if (g_outContainers.size() < 256) g_outContainers.push_back(c);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+std::vector<ContainerState> takeContainers() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<ContainerState> in;
+    in.swap(g_inContainers);
+    ReleaseSRWLockExclusive(&g_lock);
+    return in;
+}
+
+void setLocalSearched(uint16_t nodeCount, const std::vector<uint8_t>& bits) {
+    AcquireSRWLockExclusive(&g_lock);
+    g_localSearchedCount = nodeCount;
+    g_localSearched = bits;
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+uint16_t getRemoteSearched(std::vector<uint8_t>& bits) {
+    AcquireSRWLockShared(&g_lock);
+    bits = g_remoteSearched;
+    const uint16_t n = g_remoteSearchedCount;
+    ReleaseSRWLockShared(&g_lock);
+    return n;
 }
 
 void setLocalLook(const std::string& parts) {

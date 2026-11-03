@@ -1,0 +1,7 @@
+Node %8d: Searched for %2.2fs (Idle for %2.fs)
+Active Prop Search States: %i
+RTSWorldBuildingSetSearched
+NSRTSWorld::ResourceNodeContainerMenuAction
+Game.Player.InsideSearchedBuilding
+Reset saved searches
+Search Progress

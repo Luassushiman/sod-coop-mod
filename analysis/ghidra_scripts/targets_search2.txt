@@ -1,0 +1,4 @@
+NSRTSWorld::PropResourceCounts::SetResourceCount
+NSRTSWorld::PropResourceCounts::AddResourceCount
+NSRTSWorld::PropResourceCounts::Save
+NSRTSWorld::FindPropInSite

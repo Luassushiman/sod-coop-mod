@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 20;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat
+inline constexpr uint16_t kProtocolVersion = 21;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -21,6 +21,8 @@ enum class PacketType : uint8_t {
     Hit = 7,      // golpe (enviado 3x). cliente -> host: o cliente acertou um zumbi;
                   // host -> cliente: um zumbi acertou o jogador do cliente
     Look = 8,     // ambos: partes do personagem (aparência do sobrevivente), a cada 2 s
+    Searched = 9, // ambos: lugares de busca já vasculhados (bit por nó), a cada 1 s
+    Container = 10, // ambos: o que sobrou num lugar vasculhado (ao mudar e a cada 2 s)
 };
 
 #pragma pack(push, 1)
@@ -102,6 +104,22 @@ struct HitPacket {
     float damage;
 };
 inline constexpr int kLookSize = 1200;
+inline constexpr int kSearchedBytes = 512;  // até 4096 nós (o Breakdown tem 1688)
+struct SearchedPacket {
+    Header h;
+    uint16_t nodeCount;               // nós no mundo do remetente (os dois lados precisam ter o mesmo)
+    uint8_t bits[kSearchedBytes];     // bit n = nó n vasculhado
+};
+inline constexpr int kContainerSlots = 16;
+struct ContainerPacket {
+    Header h;
+    int32_t node;                        // nó do lugar de busca (igual nas duas cópias)
+    uint32_t version;                    // maior = mais novo (quem muda soma 1)
+    uint32_t count;                      // itens dentro (até 16)
+    uint32_t ids[kContainerSlots];       // id do item ou do recurso (mesmos ids nas duas cópias)
+    uint8_t counts[kContainerSlots];     // quantidade de cada
+    uint8_t types[kContainerSlots];      // 0 = item, 1 = lote de recurso, 2 = reabastecimento
+};
 struct LookPacket {
     Header h;
     uint16_t lookSeq;       // muda quando a aparência muda

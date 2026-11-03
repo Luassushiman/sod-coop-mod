@@ -197,6 +197,21 @@ Animações observadas no jogador (Breakdown, taco): golpes `BluntLight_diagonal
 | Material da parte | `IAttachmentObject` `+0x34` GetMaterial (substituto em `this+8`, senão o do modelo), `+0x38`/`+0x3C` SetReplacementMaterial (`this+8`/`this+0xC`); `IMaterial` `+0x18` GetName (`this+0x18`) | VALIDADO-RUNTIME | nomes `.../variant/vNN` lidos; cores iguais no fantoche |
 | `IMaterialManager` | `I3DEngine` `+0x21C` GetMaterialManager; `+0x14` LoadMaterial(nome, bool, bool, bool) — 4 argumentos; `+0x20` CloneMaterial(mtl, -1) | VALIDADO-RUNTIME | uso em `0x0149E560` e `0x0131BCC0`; 5 argumentos derrubou o jogo |
 
+## 4g. Lugares de busca (mundo RTS) — 2026-11-03
+
+Os lugares de vasculhar (armários, gavetas...) quase nunca são entidades (`UL_Searchable` existe, mas não havia nenhuma em 200 m): são **nós** do mundo RTS (`UL\RTSWorld\RTSWorld.cpp`), numerados pelos dados do nível. No Breakdown, as duas cópias têm 1688 nós, e o mesmo nó fica no mesmo prédio nas duas.
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| Tabela de nós | `*(0x01E46A98)`; `+0x10` u16* prédio de cada nó, `+0x20` u8* flags, `+0x24` u16 quantidade | VALIDADO-RUNTIME | 1688 nós nas duas cópias; `predio[511]` = 128 nas duas |
+| Flag "vasculhado" | `flags[nó] & 1` | VALIDADO-RUNTIME | só o nó vasculhado mudou de 0 para 1 (936 x 935); gravar no client fez o jogo não sortear itens |
+| Prédios | `0x01E20C48`, 0xC bytes cada; `+4` flags (`0x10` = vasculhado) | CONFIRMADO-ESTÁTICO | `0x013AB350` (de `RTSWorldBuildingSetSearched`, `0x013B6C20`) |
+| Fim da busca de um nó | `0x013B9FC0` cdecl(nó), só para o nó aberto (`0x0190D820`): sem entrada no histórico cria uma (`0x013AD200`) com o lote de recurso; se a flag ainda é 0, liga a flag e sorteia os itens (`0x013A89B0`) | CONFIRMADO-ESTÁTICO | descompilação |
+| Histórico de busca | `0x01E450D0`, 20 entradas de 0x68 em anel (próxima em `0x01E20BA4`): `+0` int nó (-1 livre), `+4` u32 n, `+8` u32 ids[16], `+0x48` u8 qtd[16], `+0x58` u8 tipo[16] (0 item, 1 lote de recurso, 2 reabastecimento) | VALIDADO-RUNTIME | entrada do nó 500 lida nas duas cópias; ids iguais nas duas (`6` = lote de comida) |
+| Nova entrada | `0x013AD200` cdecl(nó) -> entrada; limpa com `0x013AD510` e devolve os recursos da antiga | VALIDADO-RUNTIME | chamada pelo mod no client |
+| Recursos por nó | `0x01E22448` + nó*2: {u8 def, u8 qtd}; `0x013AD3C0` cdecl(entrada, n, bool devolver) tira/devolve os lotes de recurso das entradas | VALIDADO-RUNTIME (leitura) | qtd 0 no nó 500 depois da busca |
+| Tirar item do lugar | `ResourceNodeContainerMenuAction` `0x013BB100`; `0x013AD350` (entrada, slot, qtd) | CONFIRMADO-ESTÁTICO | descompilação |
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).

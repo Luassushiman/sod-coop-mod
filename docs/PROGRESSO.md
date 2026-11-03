@@ -307,3 +307,19 @@ Limitações:
 
 - O jogo voltava à resolução salva (1920×1080 a partir de 0,0, parecendo tela cheia) e o `window_keeper` o trazia de volta; o client precisava de Alt+Tab. Agora o mod aplica `r_Fullscreen=0` e `r_Width`/`r_Height` = área interna da janela (`[window]` − borda de 16×39 px) ao iniciar. Trocar a resolução com o jogo aberto funcionou sem fechar.
 - Ao aplicar a resolução, o jogo centraliza a janela sem mudar o tamanho; o `window_keeper` agora corrige também a posição (antes só o tamanho), para as duas ficarem no topo, lado a lado.
+
+## Itens — etapa 1: lugares vasculhados (2026-11-03) ✅
+
+- Os lugares de vasculhar são nós do mundo RTS, com os mesmos números nas duas cópias (detalhes em `RE_ENDERECOS.md`, 4g). Módulo `src/game/loot.cpp`, a cada 0,5 s.
+- **Marca de vasculhado:** pacote `Searched` (protocolo v21), a cada 1 s, com um bit por nó (211 bytes para 1688 nós). Quem recebe faz `flags[nó] |= 1` no que o outro já vasculhou; nunca desmarca. Com a flag ligada, o jogo não sorteia itens de novo ao abrir.
+- **O que sobrou dentro:** pacote `Container`, com a entrada do histórico de busca do jogo (nó, itens, quantidades, tipos), sempre que muda aqui e de novo a cada 2 s. Cada nó tem uma versão: quem muda soma 1, e vale a maior; com versões iguais e conteúdos diferentes (os dois começaram do mesmo save), vale o do host. Sem entrada no histórico, o mod cria uma pelo mesmo caminho do jogo (`0x013AD200`) e acerta os recursos (`0x013AD3C0`).
+- Teste com as duas cópias:
+  - 1ª versão (só a marca): o host vasculhou o nó 500 e pegou arma e molotov. O client recebeu a marca em 1 s; ao abrir, só tinha o lote de comida, que o jogo põe mesmo em lugar marcado.
+  - 2ª versão (com o conteúdo): o host vasculhou o nó 506 e pegou um item. O client recebeu as versões 1 e 2 e viu os mesmos itens. O client pegou o último; o host recebeu a versão 3 (vazio) e o lugar deixou de ser interativo, como num lugar vazio. Confirmado pelo usuário.
+
+Limitações:
+- O histórico do jogo guarda só os últimos 20 lugares; um lugar que sai do anel perde o que sobrou (igual ao jogo sozinho).
+- Pegar ao mesmo tempo o mesmo item nos dois lados duplica o item (vale a última versão que chegar).
+- Prédios inteiros marcados como vasculhados (flag do prédio) não são enviados; só os nós.
+- Lotes de recurso carregados, estoque da base e itens no chão ficam para as próximas etapas.
+
