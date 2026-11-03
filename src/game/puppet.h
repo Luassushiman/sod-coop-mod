@@ -33,6 +33,10 @@ bool holdPose(const std::string& name, float time, int layer);
 // Para a animação da camada (blend de saída padrão do motor).
 bool stopLayer(int layer);
 
+// Vira corpo mole (ragdoll), em passos: 0 liga a física; 1 (alguns frames depois, e de novo
+// se preciso) solta o corpo. Depois disso o fantoche não deve mais ser movido nem animado.
+bool ragdoll(int step);
+
 // Avalia uma expressão Lua e devolve o resultado como texto (canal pelo nome
 // da entidade "sodcoop_text"). Até ~250 caracteres.
 bool readLuaText(const char* expr, std::string& out);

@@ -41,6 +41,26 @@ function SodCoop.SpawnPuppet(model, x, y, z)
   SodCoop.puppet = e
   SodCoop.stage = 5
 end
+-- Corpo mole (o jogador do outro lado morreu: lá o corpo cai por física, sem animação).
+-- step 0: liga a física do AnimObject; step 1 (frames depois): ragdoll e empurrão leve.
+-- Tudo no mesmo frame deixou o corpo parado curvado; o ragdoll só caiu quando chamado
+-- com a física já ligada antes (2026-11-03).
+function SodCoop.PuppetRagdoll(step)
+  if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
+  local e = SodCoop.puppet
+  if step == 0 then
+    e.Properties.Physics.bPhysicalize = 1
+    e.Properties.Physics.bRigidBody = 1
+    e.Properties.Physics.Mass = 80  -- sem massa, o ragdoll ficou pendurado em pé (2026-11-03)
+    e.Properties.Physics.Density = -1
+    e:PhysicalizeThis()
+    return
+  end
+  e:Event_RagDollize()
+  e:AwakePhysics(1)
+  local h = e:GetBonePos("Bip01 Head", SodCoop.tmpBone)
+  if h then e:AddImpulse(-1, h, { x = 0, y = 0, z = -1 }, 100, 1) end
+end
 function SodCoop.RemovePuppet()
   if SodCoop.PuppetAlive() then System.RemoveEntity(SodCoop.puppet.id) end
   SodCoop.puppet = nil
@@ -201,6 +221,12 @@ bool spawn(const std::string& model, const engine::Vec3& pos, int drivenMotion) 
                   "3=SpawnEntity, 4=registro, -1=desconhecido)", stage);
     }
     return ok;
+}
+
+bool ragdoll(int step) {
+    char code[48];
+    snprintf(code, sizeof(code), "SodCoop.PuppetRagdoll(%d)", step);
+    return engine::executeLua(code, "sodcoop_ragdoll");
 }
 
 bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone) {

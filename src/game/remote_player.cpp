@@ -211,6 +211,9 @@ std::string g_weapon;      // arma presa no fantoche
 DWORD g_weaponRetryMs = 0;
 
 unsigned g_spawnCount = 0;
+bool g_ragdoll = false;  // fantoche virou corpo mole (outro jogador morto)
+int g_ragdollStep = 0;   // próximo passo de puppet::ragdoll
+DWORD g_ragdollAtMs = 0;
 
 void despawn(const char* reason) {
     if (!g_alive) return;
@@ -327,11 +330,35 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         g_upperOn = false;
         g_aimDown = g_pistolPose = false;
         g_upperSeq = static_cast<uint16_t>(s.upperSeq - 1);  // toca a camada 1 atual
+        g_ragdoll = false;
         if (!g_alive) g_retryAfterMs = now + 3000;
         else {
             ++g_spawnCount;
             log::info("remote_player: fantoche do jogador %08X criado (%s)", remote.peerId, model.c_str());
         }
+        return;
+    }
+
+    // Outro jogador morto: lá o corpo cai por física, sem animação de morte. O fantoche vira
+    // corpo mole e para de ser movido; quando o outro jogador volta, é recriado em pé.
+    if (remote.state.dead) {
+        if (!g_ragdoll) {
+            g_ragdoll = true;
+            g_ragdollStep = 0;
+            g_ragdollAtMs = now;
+        }
+        // 0 = física; 300 ms depois, o ragdoll; 1 s depois, de novo (garante a queda).
+        if (g_ragdollStep <= 2 && now >= g_ragdollAtMs) {
+            const bool ok = puppet::ragdoll(g_ragdollStep == 0 ? 0 : 1);
+            log::info("remote_player: outro jogador morto; ragdoll do fantoche passo %d -> %s", g_ragdollStep,
+                      ok ? "OK" : "FALHOU");
+            g_ragdollAtMs = now + (g_ragdollStep == 0 ? 300 : 700);
+            ++g_ragdollStep;
+        }
+        return;
+    }
+    if (g_ragdoll) {
+        despawn("outro jogador voltou a viver");
         return;
     }
 

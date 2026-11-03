@@ -85,7 +85,7 @@ inline constexpr int kMaxZombiesPerPacket = 10;
 
 struct ZombieEntry {
     uint32_t id;                  // EntityId do zumbi no host (o nome "ULZombie<n>" pode repetir)
-    uint8_t flags;                // bit 0: animação em loop
+    uint8_t flags;                // bit 0: animação em loop; bit 1: morto
     float pos[3];
     float yaw;
     char anim[kZombieAnimSize];   // animação mais nova da camada 0 do zumbi no host

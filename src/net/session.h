@@ -65,6 +65,7 @@ struct RemoteState {
 struct ZombieState {
     uint32_t id = 0;  // EntityId no host
     bool loop = false;
+    bool dead = false;  // morto no host
     float pos[3] = {};
     float yaw = 0;
     char anim[32] = {};

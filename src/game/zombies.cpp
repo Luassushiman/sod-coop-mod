@@ -44,6 +44,8 @@ SodCoop.zc = SodCoop.zc or {}  -- host: zumbis conduzidos pelo mod (EntityId -> 
 SodCoop.zById = SodCoop.zById or {}  -- host: EntityId -> entidade de zumbi vista
 SodCoop.zStrikes = { "ZombieMelee_strike_left_fast", "ZombieMelee_strike_right_fast", "ZombieMelee_attack_close" }
 SodCoop.zSpeed = { Feral = 6.5, Juggernaut = 2.8, Bloater = 2.2 }  -- m/s; os outros 3,5
+SodCoop.zReact = "ZombieReact_mid_front_heavy"  -- reação a golpe (vista num zumbi do host)
+SodCoop.zNow = SodCoop.zNow or 0
 -- EntityId numérico: o Lua só tem o handle, que o tostring mostra em hexadecimal
 -- ("userdata: 0002FCFA"). O nome "ULZombie<n>" não serve de id: o jogo repete.
 function SodCoop.EId(e)
@@ -60,8 +62,10 @@ function SodCoop.ListZombies(x1, y1, z1, x2, y2, z2, r)
         seen[id] = true
         SodCoop.zById[id] = e
         -- "id=animação" quando o mod conduz o zumbi (ZChase): o cliente mostra essa.
+        -- "id~": zumbi morto (o cliente não mira nele).
         local z = SodCoop.zc[id]
-        out[#out + 1] = (z and z.anim) and (id .. "=" .. z.anim) or tostring(id)
+        if e:IsDead() then out[#out + 1] = id .. "~"
+        else out[#out + 1] = (z and z.anim) and (id .. "=" .. z.anim) or tostring(id) end
       end
     end
   end
@@ -86,6 +90,15 @@ function SodCoop.ZDamage(id, dmg)
     return string.format("morto (%.0f -> 0)", h)
   end
   z.actor:SetHealth(h - dmg)
+  -- Zumbi conduzido: reage ao golpe (para, cancela o golpe dele e toca a reação).
+  local c = SodCoop.zc[id]
+  if c then
+    c.anim = SodCoop.zReact
+    c.hpAnim = nil
+    c.hitAt = nil
+    c.busyUntil = SodCoop.zNow + 0.45
+    c.strikeAt = math.max(c.strikeAt, SodCoop.zNow - 1.0)
+  end
   return string.format("vida %.0f -> %.0f", h, h - dmg)
 end
 -- Host: a IA do jogo só persegue o jogador local, então o mod conduz os zumbis
@@ -95,7 +108,8 @@ end
 -- ids dos zumbis cujo golpe acertou neste frame (0,4 s depois do início do golpe,
 -- se o cliente ainda estiver a até 2,2 m), separados por espaço. Vários zumbis
 -- ficam a pelo menos 0,9 m um do outro, em volta do cliente.
-function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
+function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro, bone)
+  SodCoop.zNow = now
   local t = SodCoop.zTarget or {}
   t.x, t.y, t.z = tx, ty, tz
   SodCoop.zTarget = t
@@ -119,7 +133,10 @@ function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
       end
       if c then
         seen[id] = true
-        if dc > 0.01 then e:SetWorldAngles({ x = 0, y = 0, z = math.atan2(-dx, dy) }) end
+        if dc > 0.01 then
+          c.yaw = math.atan2(-dx, dy)
+          e:SetWorldAngles({ x = 0, y = 0, z = c.yaw })
+        end
         if c.hitAt and now >= c.hitAt then
           c.hitAt = nil
           if dc <= 2.2 then hits[#hits + 1] = tostring(id) end
@@ -155,6 +172,16 @@ function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro)
         if rd < 1.0 and rd > 0.01 then np.x, np.y = tx + rx / rd * 1.0, ty + ry / rd * 1.0 end
         if np.x ~= p.x or np.y ~= p.y or np.z ~= p.z then e:SetWorldPos(np) end
         placed[#placed + 1] = np
+        -- Fantoche do host (HAdopt): segue o zumbi e toca a animação escolhida aqui.
+        local hp = SodCoop.hA[id] and SodCoop.zp[id]
+        if hp and System.GetEntity(hp.id) then
+          SodCoop.ZPlace(hp, np.x, np.y, np.z, c.yaw or 0, bone)
+          if c.anim and c.hpAnim ~= c.anim then
+            hp:StartAnimation(0, c.anim, 0, 0.2, 1, c.anim ~= SodCoop.zStrikes[1] and c.anim ~= SodCoop.zStrikes[2]
+                              and c.anim ~= SodCoop.zStrikes[3] and c.anim ~= SodCoop.zReact)
+            c.hpAnim = c.anim
+          end
+        end
       end
     end
   end
@@ -177,6 +204,15 @@ function SodCoop.PlayerHurt(dmg)
   a.actor:SetHealth(h - dmg)
   if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 0.5, 0.25, 0.1, a:GetWorldPos()) end
   return string.format("vida %.0f -> %.0f", h, h - dmg)
+end
+-- Cliente: impacto do golpe do jogador local no fantoche id, sem esperar o host: o fantoche
+-- reage na hora e a câmera treme de leve.
+function SodCoop.ZHitFeedback(id, melee)
+  if SodCoop.ZAlive(id) then SodCoop.zp[id]:StartAnimation(0, SodCoop.zReact, 0, 0.1, 1, false) end
+  local a = g_localActor
+  if melee and a and a.actor and a.actor.CameraShake then
+    pcall(a.actor.CameraShake, a.actor, 0.7, 0.2, 0.1, a:GetWorldPos())
+  end
 end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
@@ -206,27 +242,59 @@ end
 function SodCoop.ZClear()
   for id, _ in pairs(SodCoop.zp) do SodCoop.ZRemove(id) end
 end
+-- Host: o fantoche zp[id] passa a mostrar o zumbi conduzido id; o zumbi fica sem desenho.
+SodCoop.hA = SodCoop.hA or {}
+function SodCoop.HAdopt(id)
+  local z = SodCoop.ZEntity(id)
+  if not z or not SodCoop.ZAlive(id) then return "sem zumbi" end
+  z:DrawSlot(0, 0)
+  SodCoop.hA[id] = true
+  return "ok"
+end
+-- Host: tira o fantoche e devolve o desenho ao zumbi (vivo ou morto).
+function SodCoop.HRelease(id)
+  SodCoop.ZRemove(id)
+  SodCoop.hA[id] = nil
+  local z = SodCoop.ZEntity(id)
+  if z then z:DrawSlot(0, 1) end
+end
+-- Cliente: zumbi morto no host (lá ele cai por física, sem animação de morte). Como o
+-- fantoche do jogador (SodCoop.PuppetRagdoll): step 0 liga a física; step 1 solta o corpo.
+function SodCoop.ZRagdoll(id, step)
+  if not SodCoop.ZAlive(id) then return end
+  local e = SodCoop.zp[id]
+  if step == 0 then
+    e.Properties.Physics.bPhysicalize = 1
+    e.Properties.Physics.bRigidBody = 1
+    e.Properties.Physics.Mass = 80  -- sem massa, o ragdoll ficou pendurado em pé (2026-11-03)
+    e.Properties.Physics.Density = -1
+    e:PhysicalizeThis()
+    return
+  end
+  e:Event_RagDollize()
+  e:AwakePhysics(1)
+end
 function SodCoop.ZAnim(id, name, loop)
   if not SodCoop.ZAlive(id) then return end
   SodCoop.zp[id]:StartAnimation(0, name, 0, 0.2, 1, loop)
 end
 -- d = { id, x, y, z, yaw, id, x, ... }. Compensa o deslocamento de raiz pelo osso
 -- bone (como o fantoche do jogador). Entidades que sumiram são ignoradas.
+function SodCoop.ZPlace(e, x, y, z, yaw, bone)
+  e:SetWorldAngles({ x = 0, y = 0, z = yaw })
+  e:SetWorldPos({ x = x, y = y, z = z })
+  if bone ~= "" then
+    local b = e:GetBonePos(bone, SodCoop.zBone)
+    if b then
+      local dx, dy = b.x - x, b.y - y
+      if dx * dx + dy * dy < 36 then e:SetWorldPos({ x = x - dx, y = y - dy, z = z }) end
+    end
+  end
+end
 function SodCoop.ZMoveAll(d, bone)
   for i = 1, #d, 5 do
     local e = SodCoop.zp[d[i]]
-    if e and System.GetEntity(e.id) then
-      local x, y, z = d[i + 1], d[i + 2], d[i + 3]
-      e:SetWorldAngles({ x = 0, y = 0, z = d[i + 4] })
-      e:SetWorldPos({ x = x, y = y, z = z })
-      if bone ~= "" then
-        local b = e:GetBonePos(bone, SodCoop.zBone)
-        if b then
-          local dx, dy = b.x - x, b.y - y
-          if dx * dx + dy * dy < 36 then e:SetWorldPos({ x = x - dx, y = y - dy, z = z }) end
-        end
-      end
-    end
+    if e and System.GetEntity(e.id) then SodCoop.ZPlace(e, d[i + 1], d[i + 2], d[i + 3], d[i + 4], bone) end
   end
 end
 )lua";
@@ -305,6 +373,43 @@ struct HostLook {
     bool seen = false;  // na lista desta rodada
 };
 std::map<uint32_t, HostLook> g_hostLooks;  // EntityId do zumbi -> aparência
+std::map<uint32_t, bool> g_hostPuppets;    // zumbi conduzido com fantoche no host -> visto nesta rodada
+
+void releaseHostPuppet(uint32_t id) {
+    char code[64];
+    snprintf(code, sizeof(code), "SodCoop.HRelease(%u)", id);
+    engine::executeLua(code, "sodcoop_hrelease");
+}
+
+void releaseAllHostPuppets() {
+    for (const auto& [id, seen] : g_hostPuppets) releaseHostPuppet(id);
+    if (!g_hostPuppets.empty()) log::info("zombies: %zu fantoche(s) do host removidos", g_hostPuppets.size());
+    g_hostPuppets.clear();
+}
+
+// Zumbi conduzido pelo mod: fantoche com a aparência dele no lugar (o zumbi fica sem desenho).
+void adoptHostPuppet(const Config& cfg, uint32_t id, const net::ZombieState& z, const HostLook& look) {
+    const std::string base = appearance::baseModel(look.text);
+    const std::string model = base.empty() ? puppetModel(z.model, cfg) : base;
+    char code[256];
+    snprintf(code, sizeof(code), "SodCoop.ZSpawn(%u, \"%s\", %.2f, %.2f, %.2f)", id, model.c_str(), z.pos[0],
+             z.pos[1], z.pos[2]);
+    std::string eid, result;
+    if (!puppet::readLuaText(code, eid)) {
+        log::warn("zombies: fantoche do host para o zumbi %u falhou", id);
+        return;
+    }
+    int added = 0, failed = 0;
+    if (!base.empty()) {
+        void* entity = engine::getEntity(static_cast<engine::EntityId>(strtoul(eid.c_str(), nullptr, 10)));
+        if (entity) added = appearance::attachParts(entity, look.text, failed);
+    }
+    snprintf(code, sizeof(code), "SodCoop.HAdopt(%u)", id);
+    puppet::readLuaText(code, result);
+    g_hostPuppets[id] = true;
+    log::info("zombies: fantoche do host no zumbi conduzido %u (%s, %d parte(s), %d falha(s)): %s", id, model.c_str(),
+              added, failed, result.c_str());
+}
 
 // A cada frame: o mod conduz os zumbis perto do jogador do cliente (SodCoop.ZChase)
 // e manda ao cliente os golpes que acertaram.
@@ -314,14 +419,16 @@ void updateChase(const Config& cfg, double now, const engine::Vec3& self, bool o
     const double dt = last > 0 ? std::min(now - last, 0.1) : 0.0;
     last = now;
     if (!cfg.chase || !otherValid) {
+        releaseAllHostPuppets();
         if (g_chasing) engine::executeLua("SodCoop.zc = {}", "sodcoop_zchase");
         g_chasing = false;
         return;
     }
     g_chasing = true;
-    char expr[256];
-    snprintf(expr, sizeof(expr), "SodCoop.ZChase(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.4f, %.3f, %.1f)", other.x,
-             other.y, other.z, self.x, self.y, self.z, dt, now, cfg.aggroRadius);
+    char expr[320];
+    snprintf(expr, sizeof(expr), "SodCoop.ZChase(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.4f, %.3f, %.1f, \"%s\")",
+             other.x, other.y, other.z, self.x, self.y, self.z, dt, now, cfg.aggroRadius,
+             cfg.hostPuppets ? cfg.rootBone.c_str() : "");
     std::string hits;
     if (!puppet::readLuaText(expr, hits)) {
         static int failures = 0;
@@ -345,10 +452,30 @@ void updateChase(const Config& cfg, double now, const engine::Vec3& self, bool o
 struct Puppet {
     std::string anim;
     engine::Vec3 pos{};     // posição desenhada no último frame
+    bool dead = false;      // morto no host: golpes e tiros não miram nele
+    int ragdollStep = 0;    // corpo mole depois da morte (SodCoop.ZRagdoll); 3 = feito
+    double ragdollAt = 0;
     uint32_t lookHash = 0;  // aparência montada (0 = modelo simplificado, sem a do host)
 };
 std::map<uint32_t, Puppet> g_puppets;  // EntityId do zumbi no host -> fantoche
-std::map<uint32_t, double> g_waitingLook;  // zumbi sem fantoche ainda -> desde quando espera a aparência
+std::map<uint32_t, double> g_waitingLook;
+// Golpe corpo a corpo detectado no início do movimento: dano e impacto saem no contato.
+constexpr double kMeleeContactDelay = 0.3;  // s
+struct PendingHit {
+    net::HitEvent hit;
+    double at = 0;
+};
+std::vector<PendingHit> g_pendingHits;
+
+void deliverHit(const net::HitEvent& hit) {
+    char code[64];
+    snprintf(code, sizeof(code), "SodCoop.ZHitFeedback(%u, %s)", hit.zombieId, hit.kind == 0 ? "true" : "false");
+    engine::executeLua(code, "sodcoop_zhitfx");
+    // A reação já tocou aqui: quando o host mandar a mesma animação, não recomeça.
+    auto it = g_puppets.find(hit.zombieId);
+    if (it != g_puppets.end()) it->second.anim = "ZombieReact_mid_front_heavy";
+    net::sendHit(hit);
+}  // zumbi sem fantoche ainda -> desde quando espera a aparência
 bool g_clientWorld = false;  // já desligou os zumbis locais neste mundo
 double g_nextLocalCheck = 0;
 
@@ -359,6 +486,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
     static double next = 0;
     const double now = clock::seconds();
     if (!cfg.enabled || !inWorld) {
+        if (!inWorld) g_hostPuppets.clear();  // nível descarregado: as entidades já não existem
         net::setLocalZombies({});
         return;
     }
@@ -385,6 +513,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
 
     std::vector<net::ZombieState> list;
     std::vector<net::ZombieLook> looks;
+    int adopted = 0;
     size_t start = 0;
     while (start < names.size()) {
         size_t end = names.find(' ', start);
@@ -395,6 +524,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         std::string chaseAnim;
         const size_t eq = item.find('=');
         if (eq != std::string::npos) chaseAnim = item.substr(eq + 1);
+        const bool dead = item.find('~') != std::string::npos;
         const engine::EntityId id = static_cast<engine::EntityId>(strtoul(item.c_str(), nullptr, 10));
         if (id == 0) continue;
         void* entity = engine::getEntity(id);
@@ -403,6 +533,7 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
         if (!entity || !engine::getWorldTM(entity, tm) || !engine::getWorldAngles(entity, angles)) continue;
         net::ZombieState z;
         z.id = id;
+        z.dead = dead;
         z.pos[0] = tm.m[0][3];
         z.pos[1] = tm.m[1][3];
         z.pos[2] = tm.m[2][3];
@@ -444,7 +575,26 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
             looks.push_back({id, look.hash, look.text});
             look.nextSend = now + kLookResendInterval;
         }
+        if (cfg.hostPuppets && !chaseAnim.empty()) {
+            auto hp = g_hostPuppets.find(id);
+            if (hp != g_hostPuppets.end()) hp->second = true;
+            else if (adopted < 4) {
+                ++adopted;
+                adoptHostPuppet(cfg, id, z, look);
+            }
+        }
         list.push_back(z);
+    }
+    // Fantoches do host de zumbis que o mod já não conduz (soltos ou mortos).
+    for (auto it = g_hostPuppets.begin(); it != g_hostPuppets.end();) {
+        if (it->second) {
+            it->second = false;
+            ++it;
+            continue;
+        }
+        releaseHostPuppet(it->first);
+        log::info("zombies: fantoche do host do zumbi %u removido", it->first);
+        it = g_hostPuppets.erase(it);
     }
     for (auto it = g_hostLooks.begin(); it != g_hostLooks.end();) {
         if (!it->second.seen) {
@@ -468,6 +618,7 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
         // Nível descarregado: as entidades já não existem.
         g_puppets.clear();
         g_waitingLook.clear();
+        g_pendingHits.clear();
         g_clientWorld = false;
         return;
     }
@@ -500,6 +651,15 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
             log::warn("zombies: zumbis locais apareceram no cliente (%s); zm_killAll", local.c_str());
             engine::executeLua("System.ExecuteCommand(\"zm_killAll\")", "sodcoop_zkill");
         }
+    }
+
+    for (auto it = g_pendingHits.begin(); it != g_pendingHits.end();) {
+        if (now < it->at) {
+            ++it;
+            continue;
+        }
+        deliverHit(it->hit);
+        it = g_pendingHits.erase(it);
     }
 
     const std::map<uint32_t, net::RemoteZombie> remote = net::getRemoteZombies();
@@ -579,6 +739,23 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
                 log::info("zombies: fantoche do zumbi %u criado com a aparencia do host (%s, %d parte(s), %d falha(s); "
                           "%zu no total)", id, model.c_str(), added, failed, g_puppets.size());
         }
+        if (b.dead) {
+            // Morto: vira corpo mole e deixa de ser movido/animado (0 física; 0,3 s e 1 s: soltar).
+            Puppet& p = it->second;
+            if (!p.dead) {
+                p.dead = true;
+                p.ragdollStep = 0;
+                p.ragdollAt = now;
+            }
+            if (p.ragdollStep <= 2 && now >= p.ragdollAt) {
+                snprintf(buf, sizeof(buf), "SodCoop.ZRagdoll(%u, %d)", id, p.ragdollStep == 0 ? 0 : 1);
+                if (!engine::executeLua(buf, "sodcoop_zragdoll") || p.ragdollStep == 0)
+                    log::info("zombies: zumbi %u morto no host; ragdoll do fantoche passo %d", id, p.ragdollStep);
+                p.ragdollAt = now + (p.ragdollStep == 0 ? 0.3 : 0.7);
+                ++p.ragdollStep;
+            }
+            continue;
+        }
         if (b.anim[0] && it->second.anim != b.anim && isIdentifier(b.anim)) {
             snprintf(buf, sizeof(buf), "SodCoop.ZAnim(%u, \"%s\", %s)", id, b.anim, b.loop ? "true" : "false");
             engine::executeLua(buf, "sodcoop_zanim");
@@ -610,6 +787,7 @@ void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self,
     uint32_t best = 0;
     float bestScore = 1e9f;
     for (const auto& [id, p] : g_puppets) {
+        if (p.dead) continue;
         if (kind == AttackKind::Melee) {
             const float dx = p.pos.x - self.x, dy = p.pos.y - self.y;
             const float dist = std::sqrt(dx * dx + dy * dy);
@@ -633,7 +811,8 @@ void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self,
     hit.zombieId = best;
     hit.kind = static_cast<uint8_t>(kind);
     hit.damage = kind == AttackKind::Melee ? cfg.meleeDamage : cfg.shotDamage;
-    net::sendHit(hit);
+    if (kind == AttackKind::Melee) g_pendingHits.push_back({hit, clock::seconds() + kMeleeContactDelay});
+    else deliverHit(hit);
     log::info("zombies: %s do cliente acertou o zumbi %u (%.1f m); enviando %.0f de dano",
               kind == AttackKind::Melee ? "golpe" : "tiro", best, bestScore, hit.damage);
 }

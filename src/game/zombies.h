@@ -30,6 +30,9 @@ struct Config {
     bool chase = true;
     float aggroRadius = 15.0f;   // m do cliente para o mod assumir o zumbi (= raio de ativação)
     float attackDamage = 8.0f;   // por golpe de zumbi no jogador do cliente
+    // Host: o zumbi conduzido fica sem desenho (DrawSlot 0) e um fantoche com a aparência
+    // dele mostra a corrida e o golpe (a animação do zumbi de verdade é do ZombieManager).
+    bool hostPuppets = true;
     // Ativar também os zumbis perto do cliente (zombie_activation), e não só os perto do host.
     bool clientActivation = true;
     int clientPointType = -1;   // tipo do ponto na lista do ZombieManager (-1 = nenhum; 1 = aliado)

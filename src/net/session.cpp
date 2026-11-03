@@ -140,7 +140,7 @@ void sendZombies() {
             const ZombieState& z = list[i];
             ZombieEntry& e = p.e[p.count];
             e.id = z.id;
-            e.flags = z.loop ? 1 : 0;
+            e.flags = (z.loop ? 1 : 0) | (z.dead ? 2 : 0);
             memcpy(e.pos, z.pos, sizeof(e.pos));
             e.yaw = z.yaw;
             memcpy(e.anim, z.anim, sizeof(e.anim));
@@ -166,6 +166,7 @@ void handleZombies(const char* data, int size) {
         ZombieState z;
         z.id = e.id;
         z.loop = (e.flags & 1) != 0;
+        z.dead = (e.flags & 2) != 0;
         memcpy(z.pos, e.pos, sizeof(z.pos));
         z.yaw = e.yaw;
         memcpy(z.anim, e.anim, sizeof(z.anim));
