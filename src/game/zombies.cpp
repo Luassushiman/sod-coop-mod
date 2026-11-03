@@ -190,16 +190,18 @@ function SodCoop.ZChase(tx, ty, tz, hx, hy, hz, dt, now, aggro, bone)
   end
   return table.concat(hits, " ")
 end
--- Cliente: golpe de zumbi do host no jogador local. Se zerar a vida, mata pelo
--- caminho normal do jogo (Kill: queda e tela de morte, como na morte comum).
+-- Cliente: golpe de zumbi do host no jogador local. O golpe fatal não mata: deixa o
+-- jogador "caído" (vida 1; o C++ avisa o host e, depois, o leva para o lado do host com a
+-- vida cheia). A morte de verdade (Kill) deixava o save do client como partida encerrada.
 function SodCoop.PlayerHurt(dmg)
   local a = g_localActor
   if not a or not a.actor then return "sem jogador" end
   if a:IsDead() then return "ja morto" end
   local h = a.actor:GetHealth()
   if h - dmg <= 0 then
-    a:Kill(true, NULL_ENTITY, NULL_ENTITY, false, false)
-    return string.format("morto (%.0f -> 0)", h)
+    a.actor:SetHealth(1)
+    if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 1.5, 0.6, 0.15, a:GetWorldPos()) end
+    return string.format("caido (%.0f -> 1)", h)
   end
   a.actor:SetHealth(h - dmg)
   if a.actor.CameraShake then pcall(a.actor.CameraShake, a.actor, 0.5, 0.25, 0.1, a:GetWorldPos()) end
@@ -213,6 +215,16 @@ function SodCoop.ZHitFeedback(id, melee)
   if melee and a and a.actor and a.actor.CameraShake then
     pcall(a.actor.CameraShake, a.actor, 0.7, 0.2, 0.1, a:GetWorldPos())
   end
+end
+-- Cliente: fim do tempo caído: vida cheia e posição ao lado do host.
+function SodCoop.PlayerRise(x, y, z)
+  local a = g_localActor
+  if not a or not a.actor then return "sem jogador" end
+  local ok, maxh = pcall(a.actor.GetMaxHealth, a.actor)
+  if not ok or not maxh or maxh <= 0 then maxh = 100 end
+  a.actor:SetHealth(maxh)
+  a:SetWorldPos({ x = x, y = y, z = z })
+  return string.format("vida %.0f", maxh)
 end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
@@ -477,6 +489,8 @@ void deliverHit(const net::HitEvent& hit) {
     net::sendHit(hit);
 }  // zumbi sem fantoche ainda -> desde quando espera a aparência
 bool g_clientWorld = false;  // já desligou os zumbis locais neste mundo
+constexpr double kDownTime = 5.0;  // s caído depois do golpe fatal, antes de voltar ao lado do host
+double g_downUntil = 0;            // 0 = de pé
 double g_nextLocalCheck = 0;
 
 }  // namespace
@@ -618,6 +632,7 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
         // Nível descarregado: as entidades já não existem.
         g_puppets.clear();
         g_waitingLook.clear();
+        g_downUntil = 0;
         g_pendingHits.clear();
         g_clientWorld = false;
         return;
@@ -626,12 +641,16 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
     const double now = clock::seconds();
 
     for (const net::HitEvent& hit : net::takeHits()) {
-        if (hit.kind != 2) continue;
+        if (hit.kind != 2 || g_downUntil > 0) continue;  // caído: os golpes não contam
         char expr[64];
         snprintf(expr, sizeof(expr), "SodCoop.PlayerHurt(%.1f)", hit.damage);
         std::string result;
         puppet::readLuaText(expr, result);
         log::info("zombies: zumbi %u do host golpeou o jogador (%.0f): %s", hit.zombieId, hit.damage, result.c_str());
+        if (result.compare(0, 5, "caido") == 0) {
+            g_downUntil = now + kDownTime;
+            log::info("zombies: jogador caido; volta ao lado do host em %.0f s", kDownTime);
+        }
     }
 
     // Zumbis do próprio cliente: desligados ao entrar no mundo; conferidos de tempos em tempos.
@@ -770,6 +789,20 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
     static int moveFailures = 0;
     if (!engine::executeLua(moves.c_str(), "sodcoop_zmove") && ++moveFailures <= 5)
         log::warn("zombies: ZMoveAll falhou");
+}
+
+bool clientDowned() { return g_downUntil > 0; }
+
+bool clientRise(const engine::Vec3& host) {
+    if (g_downUntil <= 0 || clock::seconds() < g_downUntil) return false;
+    g_downUntil = 0;
+    char expr[128];
+    snprintf(expr, sizeof(expr), "SodCoop.PlayerRise(%.2f, %.2f, %.2f)", host.x + 2.0f, host.y, host.z + 0.5f);
+    std::string result;
+    const bool ok = puppet::readLuaText(expr, result);
+    log::info("zombies: jogador de pe ao lado do host (%.1f, %.1f, %.1f): %s", host.x + 2.0f, host.y, host.z,
+              ok ? result.c_str() : "FALHOU");
+    return ok;
 }
 
 void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,

@@ -46,6 +46,12 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
                 const engine::Vec3& other);
 void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self);
 
+// Cliente: golpe fatal de zumbi deixa o jogador caído (não morre); enquanto isso o host o
+// vê morto (State.dead). Depois de 5 s, clientRise o põe de pé ao lado do host (host = posição
+// do jogador do host) e devolve true.
+bool clientDowned();
+bool clientRise(const engine::Vec3& host);
+
 // Cliente: o jogador local deu um golpe/tiro. Escolhe o fantoche de zumbi atingido
 // e manda o dano ao host. yaw = direção do corpo; aimDir = direção da mira (tiro).
 void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,

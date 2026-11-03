@@ -479,7 +479,7 @@ void onFrame() {
         memcpy(mine.upper, anim_watch::currentUpper().name, sizeof(mine.upper));
         mine.upperSeq = anim_watch::currentUpper().seq;
         memcpy(mine.aimPose, anim_watch::currentAimPose().name, sizeof(mine.aimPose));
-        mine.dead = settled && localDead(id);
+        mine.dead = settled && (localDead(id) || zombies::clientDowned());
         float hour;
         if (engine::getTimeOfDay(hour)) mine.timeOfDay = hour;
         vehicles::fillLocal(settled, mine);
@@ -560,6 +560,8 @@ void onFrame() {
         if (g_cfg.spawnNearHost) spawnNearHost(settled, s.pos, remote, now);
         if (g_cfg.syncTimeOfDay) followHostTime(settled, remote, now);
         zombies::updateClient(g_cfg.zombies, settled, s.pos);
+        if (settled && remote.connected && remote.state.hasPlayer)
+            zombies::clientRise({remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]});
         detectLocalAttacks(settled, s, mine);
     }
 }
