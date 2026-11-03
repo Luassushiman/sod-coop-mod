@@ -350,8 +350,12 @@ Limitações:
 
 - **Pedido de ativação direto (2ª tentativa):** `0x0133CF70` é cdecl `(u16 zumbi, float prioridade, u8 flags)` e põe o zumbi numa fila de 24 pedidos ordenada por prioridade (`0x01DF2D90` zumbi, `0x01DF2D30` prioridade, `0x01DF2DC0` flags). Os zumbis "lab" têm posição em `0x01DF2F80` (12 bytes) e flags em `0x01DF4B80` (bit 31 = vaga em uso). Pedir a ativação dos zumbis a até 15 m do client **fechou o host as duas vezes**, no primeiro pedido, ao criar o zumbi: um aviso de "zumbi ativado" (`0x0134E690` → `DAT_01df2e8c` vt `+0x50`) chega a `0x0140A340` → `0x01408A78` → `0x014C883D`, que chama um endereço inválido. Marcar antes o estado de percepção (`0x01DEFD58 |= 0x10`, ponto mais perto `0x01DF0358 = 0`) não mudou nada. Logs em `testenv/host/sodcoop_host_crash8/9_ativacao.log`. Desligado (`client_activation=0`).
 
+- **Resolvido (3ª tentativa):** os fechamentos eram **erro do mod**: `0x0133CF70` é `__stdcall` (`RET 0xC`), e chamá-la como `cdecl` desalinhava a pilha (no registro, `EDI` = `0x01340711`, o retorno do hook). Corrigido, o host deixou de fechar, mas os pedidos ainda eram ignorados: a fila (`0x0131DCF0`) só age com flags (`4`, `8`, `0x10`, `0x40` → `0x013194E0`). Com **flags 8** e prioridade 1,0, como os pedidos de `DeterminePerception` (`0x01325925`), funcionou: com o host a 50 m, 5 zumbis a até 10 m do client viraram entidade, o host os enviou e eles atacaram o client. Confirmado pelo usuário. Ligado por padrão (`[zombies] client_activation=1`).
+- Antes de cada pedido, o mod grava o estado de percepção como o jogo faz (`0x01DEFD58 |= 0x10`, `0x01DF0358 = 0`). O ponto do client na lista de interesse ficou opcional e desligado (`client_point_type=-1`).
+
 Pendências:
-- Aumentar a distância de ativação perto do client (pedido do usuário): ver por que a criação de um zumbi longe do jogador fecha o jogo (`0x014C7CA0`), ou fazer o zumbi perceber o client (raycast de visão em `DeterminePerception`).
+- A fila tem 24 vagas para os dois jogadores: com muitos zumbis perto do client, os do host podem demorar a ativar (não observado).
+- Zumbis ativados longe do host ainda seguem a IA do jogo, que só persegue o host; quem os leva ao client é o `ZChase` (até `aggro_radius`, 10 m).
 - Partes e texturas dos zumbis no client (como o `Look` do jogador).
 - Golpe visível no host (fantoche no host).
 

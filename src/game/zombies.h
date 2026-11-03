@@ -29,7 +29,7 @@ struct Config {
     float aggroRadius = 10.0f;   // m do cliente para o mod assumir o zumbi
     float attackDamage = 8.0f;   // por golpe de zumbi no jogador do cliente
     // Ativar também os zumbis perto do cliente (zombie_activation), e não só os perto do host.
-    bool clientActivation = false;  // experimental: não ativou nada nos testes (ver PROGRESSO)
+    bool clientActivation = true;
     int clientPointType = -1;   // tipo do ponto na lista do ZombieManager (-1 = nenhum; 1 = aliado)
     int clientPointIndex = 99;  // índice do ponto (aliado: vaga na lista de aliados)
 };

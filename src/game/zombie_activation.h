@@ -1,11 +1,11 @@
 // Host: faz o ZombieManager ativar (transformar em entidade de verdade) também os zumbis
 // perto do jogador do cliente, e não só os perto do jogador local.
 //
-// A cada frame o ZombieManager (0x0133FF30) monta uma lista de "pontos de interesse"
-// (jogador local, aliados que o seguem, carros...) e ativa os zumbis a menos de
-// zm_activationDist de um ponto do tipo 0 (jogador) ou 1 (aliado) em DeterminePerception
-// (0x01321D20). O hook acrescenta a posição do cliente como mais um aliado, logo depois
-// dos aliados do jogo. Ver docs/RE_ENDERECOS.md, 4d.
+// A cada frame o ZombieManager (0x0133FF30) pede, em DeterminePerception (0x01321D20), a
+// ativação dos zumbis "lab" perto do jogador local, numa fila (0x0133CF70) que 0x0131DCF0
+// atende criando a entidade. O hook (no meio desse frame) põe nessa fila os zumbis a até
+// 15 m do jogador do cliente. Opcional (em teste): pôr o cliente na lista de pontos de
+// interesse, que sozinha não ativou nada. Ver docs/PROGRESSO.md, Zumbis etapa 3.
 #pragma once
 
 #include "game/engine.h"

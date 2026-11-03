@@ -25,11 +25,12 @@ constexpr uint32_t kMaxPoints = 20;
 // Tipo negativo = não põe ponto, só pede a ativação (abaixo).
 int g_type = -1;
 uint8_t g_index = 99;
-// Pedido de ativação: cdecl (u16 zumbi, float prioridade, u8 flags) -> fila de 24 pedidos
+// Pedido de ativação: __stdcall (u16 zumbi, float prioridade, u8 flags), RET 0xC -> fila de 24 pedidos
 // ordenada pela prioridade (0x01DF2D90 zumbi, 0x01DF2D30 prioridade), que o ZombieManager
 // atende criando a entidade. DeterminePerception a chama para os zumbis perto do jogador.
 constexpr uintptr_t kRequestActivation = 0x0133CF70;
-using RequestActivation_t = uint32_t(__cdecl*)(uint32_t, float, uint32_t);
+// stdcall: chamar como cdecl desalinhava a pilha e fechava o host (2 vezes, 2026-11-03).
+using RequestActivation_t = uint32_t(__stdcall*)(uint32_t, float, uint32_t);
 // Zumbis do ZombieManager (simulação "lab"): posição float[3] e flags (bit 31 = vaga em uso).
 constexpr uintptr_t kZombiePos = 0x01DF2F80;
 constexpr uintptr_t kZombieFlags = 0x01DF4B80;
@@ -62,7 +63,9 @@ void* __cdecl getListDetour() {
             if (dx * dx + dy * dy > g_radius * g_radius) continue;
             reinterpret_cast<uint16_t*>(kZombiePerception)[z] |= 0x10;
             reinterpret_cast<uint8_t*>(kZombieNearestPoint)[z] = 0;
-            request(static_cast<uint32_t>(z), g_priority, 0);
+            // flags 8: como os pedidos de DeterminePerception (0x01325925); com 0 a fila
+            // (0x0131DCF0) ignora o pedido.
+            request(static_cast<uint32_t>(z), g_priority, 8);
             ++asked;
         }
         if (asked && (++g_requests == 1 || g_requests % 600 == 0))
