@@ -237,7 +237,7 @@ Limitações da etapa 1:
 Limitações da etapa 3:
 - Cores: resolvidas em seguida (ver "cores das roupas" abaixo).
 - Não testado com sobrevivente mulher (outro esqueleto) nem com o client trocando de sobrevivente pelo menu do jogo.
-- A troca é manual (`fm_nextMember` pelo `sodcoop_cmd.lua`); o NPC do sobrevivente do client continua existindo na comunidade do host.
+- A troca era manual (`fm_nextMember` pelo `sodcoop_cmd.lua`); agora há teclas (ver abaixo). O NPC do sobrevivente do client continua existindo na comunidade do host.
 
 ### Cores das roupas (protocolo v17) ✅
 
@@ -245,3 +245,8 @@ Limitações da etapa 3:
 - O `Look` passou a levar `anexo=arquivo.chr|material` (até 1200 bytes). O fantoche carrega o material com `IMaterialManager::LoadMaterial` (`I3DEngine +0x21C` → `+0x14`, **4 argumentos**: nome, criarSeFaltar, bool, bool) e o põe com `SetReplacementMaterial` (`+0x38` e `+0x3C`), logo depois de prender a parte.
 - Erro no caminho: com 5 argumentos no `LoadMaterial` (o `-1` empilhado antes é do `CloneMaterial` seguinte), as duas cópias caíram em `EIP=0` ao montar o fantoche (dumps de 20:34:55/56).
 - Teste: client trocou de sobrevivente; o host montou o fantoche com as 6 partes e os materiais (camiseta v16, mangas v03, jeans v03, boné v02, mochila v12); o usuário confirmou que as cores batem nas duas janelas.
+### Teclas de troca de sobrevivente ✅
+
+- F6 / F7 trocam o jogador local para o sobrevivente anterior/próximo (`fm_prevMember` / `fm_nextMember`), sem precisar de base. Só com a janela daquela cópia em primeiro plano, no mundo e vivo. `[keys] prev_member` / `next_member` (código de tecla virtual do Windows; 0 desliga).
+- No jogo, a troca pelo próprio menu só existe numa base, com amigos; o save de teste ainda não tem base. A aparência se atualiza com qualquer troca, pelo pacote `Look`.
+- Teste: dois F7 no client; o host recriou o fantoche nas duas vezes. Na segunda, uma **sobrevivente mulher** (esqueleto `characters/female/human/skeleton/...`), com as 6 partes, sem falha. Confirmado pelo usuário.

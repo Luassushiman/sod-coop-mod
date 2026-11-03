@@ -58,6 +58,11 @@ struct Config {
     bool spawnNearHost = true;
     // [net] sync_time_of_day=1: o cliente segue a hora do dia do host.
     bool syncTimeOfDay = true;
+    // [keys] prev_member / next_member: teclas (código virtual do Windows; 0 = desliga) que
+    // trocam o jogador local para o sobrevivente anterior/próximo da comunidade
+    // (fm_prevMember / fm_nextMember), sem precisar de base. Padrão F6 / F7.
+    int prevMemberKey = 0x75;
+    int nextMemberKey = 0x76;
     AnimConfig anim;
     // [window] x, y, width, height (width/height 0 = não mexe na janela)
     window_keeper::Rect window;

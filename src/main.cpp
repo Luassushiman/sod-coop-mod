@@ -251,6 +251,31 @@ void followHostTime(bool settled, const net::RemoteState& remote, DWORD now) {
     }
 }
 
+// Teclas de troca de sobrevivente (só com a janela deste jogo em primeiro plano, no
+// mundo e vivo). Usa os comandos do jogo fm_prevMember / fm_nextMember; a aparência
+// nova chega ao outro lado pelo pacote Look.
+void memberSwitchKeys(bool settled, bool dead) {
+    static bool prevDown = false, nextDown = false;
+    auto pressed = [](int vk, bool& wasDown) {
+        if (vk <= 0 || vk > 0xFE) return false;
+        const bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+        const bool edge = down && !wasDown;
+        wasDown = down;
+        return edge;
+    };
+    const bool prev = pressed(g_cfg.prevMemberKey, prevDown);
+    const bool next = pressed(g_cfg.nextMemberKey, nextDown);
+    if (!prev && !next) return;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+    if (pid != GetCurrentProcessId() || !settled || dead) return;
+    const char* cmd = next ? "fm_nextMember" : "fm_prevMember";
+    char code[64];
+    snprintf(code, sizeof(code), "System.ExecuteCommand(\"%s\")", cmd);
+    const bool ok = engine::executeLua(code, "sodcoop_member");
+    log::info("sobrevivente: tecla -> %s -> %s", cmd, ok ? "OK" : "FALHOU");
+}
+
 // Jogador local morto (IActor::GetHealth <= 0). Registra a mudança no log.
 bool localDead(engine::EntityId id) {
     static bool last = false;
@@ -413,6 +438,7 @@ void onFrame() {
         }
     }
     net::setLocalState(mine);
+    memberSwitchKeys(settled, mine.dead);
 
     const bool logNow = now - lastLog >= (DWORD)g_cfg.positionLogIntervalMs;
     if (logNow) {
