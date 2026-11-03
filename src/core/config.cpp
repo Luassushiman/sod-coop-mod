@@ -54,7 +54,7 @@ Config loadConfig() {
     c.zombies.chase = GetPrivateProfileIntW(L"zombies", L"chase", 1, ini.c_str()) != 0;
     c.zombies.aggroRadius = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"aggro_radius", 10, ini.c_str()));
     c.zombies.clientActivation = GetPrivateProfileIntW(L"zombies", L"client_activation", 0, ini.c_str()) != 0;
-    c.zombies.clientPointType = GetPrivateProfileIntW(L"zombies", L"client_point_type", 1, ini.c_str());
+    c.zombies.clientPointType = GetPrivateProfileIntW(L"zombies", L"client_point_type", -1, ini.c_str());
     c.zombies.clientPointIndex = GetPrivateProfileIntW(L"zombies", L"client_point_index", 99, ini.c_str());
     c.zombies.attackDamage = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"attack_damage", 8, ini.c_str()));
     c.spawnNearHost = GetPrivateProfileIntW(L"net", L"spawn_near_host", 1, ini.c_str()) != 0;

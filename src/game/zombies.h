@@ -30,7 +30,7 @@ struct Config {
     float attackDamage = 8.0f;   // por golpe de zumbi no jogador do cliente
     // Ativar também os zumbis perto do cliente (zombie_activation), e não só os perto do host.
     bool clientActivation = false;  // experimental: não ativou nada nos testes (ver PROGRESSO)
-    int clientPointType = 1;    // tipo do ponto na lista do ZombieManager (1 = aliado)
+    int clientPointType = -1;   // tipo do ponto na lista do ZombieManager (-1 = nenhum; 1 = aliado)
     int clientPointIndex = 99;  // índice do ponto (aliado: vaga na lista de aliados)
 };
 
