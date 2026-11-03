@@ -270,7 +270,18 @@ Limitações da etapa 3:
 - Teste: host dirigindo um `Suv_New`; no client o carro andou junto e o host apareceu sentado ao volante; ao sair, voltou em pé e o carro sumiu. Confirmado pelo usuário.
 
 Limitações da etapa 1:
-- O carro só existe enquanto o outro jogador está dentro: quando ele estaciona e sai, o carro some do outro lado.
+- ~~O carro só existe enquanto o outro jogador está dentro~~ (resolvido na etapa 2).
 - O carro de verdade do outro lado não se move (se existir lá, fica no lugar).
 - Só o motorista: o outro jogador não pode entrar no carro como passageiro; sem portas, luzes, dano nem som.
 - O volante fica parado (pose fixa); as rodas não giram.
+
+## Carros — etapa 2: carro estacionado (2026-11-03) ✅
+
+- `State` leva também `vehicleId` (protocolo v19): o `EntityId` do carro no remetente. Quem recebe guarda um carro-fantoche por id (`SodCoop.rvs[id]`, nome `sodcoop_vehicle_<id>`).
+- Ao sair (0,5 s a pé), o carro não é removido: `SodCoop.ParkRemoteVehicle` liga a física e ele fica parado, no chão e com colisão. Ao voltar para o mesmo carro, o fantoche é reaproveitado (física desligada de novo); trocar de carro deixa o anterior estacionado.
+- Ao desconectar, todos os carros do outro jogador são removidos (`SodCoop.RemoveRemoteVehicles`).
+- Teste: host entrou num `Suv_New`, saiu e voltou ao mesmo; no client o carro ficou estacionado e, na volta, só havia um carro (log: "dirigindo o carro 130828 (Suv_New), o mesmo de antes"). Confirmado pelo usuário.
+
+Limitações:
+- Estacionado só do lado de quem vê; o carro continua não sendo o mesmo carro do mundo (não salva, não aparece depois de recarregar).
+- O client não pode dirigir o carro estacionado do host (é uma entidade criada pelo mod; não testado).

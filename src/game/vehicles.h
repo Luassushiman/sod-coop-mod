@@ -1,7 +1,7 @@
 // Carros: cada lado manda o carro em que o jogador local está (classe, posição e
-// ângulos). O outro lado cria um carro da mesma classe, sem física, e o move junto
-// (interpolado); enquanto isso o fantoche do jogador fica escondido. Os carros
-// do mundo não são os mesmos nas duas cópias, por isso o carro é criado.
+// ângulos e id). O outro lado cria um carro da mesma classe por id, sem física, e o
+// move junto (interpolado), com o fantoche no banco; ao sair, o carro fica estacionado
+// (com física). Os carros do mundo não são os mesmos nas duas cópias, por isso o carro é criado.
 // Thread principal.
 #pragma once
 

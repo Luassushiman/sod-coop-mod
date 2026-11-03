@@ -21,7 +21,7 @@ constexpr double kRenderDelay = 0.1;  // s atrás do estado mais novo (interpola
 // Erros sobem com error(): o ExecuteBuffer devolve false e o C++ registra no log.
 constexpr const char* kLuaHelpers = R"lua(
 SodCoop = SodCoop or {}
--- Carro em que o jogador local está: "classe x y z ax ay az" ou "".
+-- Carro em que o jogador local está: "classe x y z ax ay az idHex" ou "".
 function SodCoop.LocalVehicle()
   local a = g_localActor
   if not a or not a.actor then return "" end
@@ -30,29 +30,43 @@ function SodCoop.LocalVehicle()
   local v = System.GetEntity(vid)
   if not v or not v.vehicle then return "" end
   local p, g = v:GetWorldPos(), v:GetWorldAngles()
-  return string.format("%s %.3f %.3f %.3f %.4f %.4f %.4f", v.class, p.x, p.y, p.z, g.x, g.y, g.z)
+  local id = string.match(tostring(v.id), "(%x+)$") or "0"
+  return string.format("%s %.3f %.3f %.3f %.4f %.4f %.4f %s", v.class, p.x, p.y, p.z, g.x, g.y, g.z, id)
 end
--- Carro do outro jogador: um só, sem física, movido a cada frame.
-function SodCoop.RemoteVehicle(class, x, y, z, ax, ay, az)
-  local e = SodCoop.rv
+-- Carros do outro jogador, um por carro dele (chave = id do carro lá). Sem física
+-- enquanto ele dirige (movido a cada frame); com física quando estacionado.
+SodCoop.rvs = SodCoop.rvs or {}
+function SodCoop.RemoteVehicle(key, class, x, y, z, ax, ay, az)
+  local e = SodCoop.rvs[key]
   if e and (not System.GetEntity(e.id) or e.class ~= class) then
     if System.GetEntity(e.id) then System.RemoveEntity(e.id) end
     e = nil
-    SodCoop.rv = nil
   end
   if not e then
-    e = System.SpawnEntity({ class = class, name = "sodcoop_vehicle", position = { x = x, y = y, z = z } })
+    e = System.SpawnEntity({ class = class, name = "sodcoop_vehicle_" .. key, position = { x = x, y = y, z = z } })
     if not e then error("sodcoop: carro nao criado: " .. class) end
+    SodCoop.rvs[key] = e
+    e.sodcoopParked = true
+  end
+  if e.sodcoopParked then
     e:EnablePhysics(false)
-    SodCoop.rv = e
+    e.sodcoopParked = false
   end
   e:SetWorldPos({ x = x, y = y, z = z })
   e:SetWorldAngles({ x = ax, y = ay, z = az })
 end
-function SodCoop.RemoveRemoteVehicle()
-  local e = SodCoop.rv
-  if e and System.GetEntity(e.id) then System.RemoveEntity(e.id) end
-  SodCoop.rv = nil
+-- O outro jogador saiu: o carro fica onde está, com física (colide e fica no chão).
+function SodCoop.ParkRemoteVehicle(key)
+  local e = SodCoop.rvs[key]
+  if not e or not System.GetEntity(e.id) then SodCoop.rvs[key] = nil; return end
+  e:EnablePhysics(true)
+  e.sodcoopParked = true
+end
+function SodCoop.RemoveRemoteVehicles()
+  for k, e in pairs(SodCoop.rvs) do
+    if System.GetEntity(e.id) then System.RemoveEntity(e.id) end
+  end
+  SodCoop.rvs = {}
 end
 )lua";
 
@@ -88,9 +102,10 @@ float g_seat[3] = {};         // posição do jogador relativa ao carro (eixos d
 unsigned g_posedSpawn = ~0u;  // fantoche (remote_player::spawnCount) que já está na pose de dirigir
 constexpr const char* kDrivePose = "Vehicle_truck_steer";  // animação do jogador dirigindo (t 0,5 = volante reto)
 uint32_t g_lastSeq = 0;
-bool g_spawned = false;
-std::string g_spawnedClass;
-double g_outSince = 0;  // fora de carro desde (para não piscar ao trocar de carro)
+uint32_t g_driving = 0;        // id (no outro lado) do carro que ele está dirigindo; 0 = a pé
+uint32_t g_lastKnownCar = 0;   // último carro em que ele esteve (estacionado ao sair)
+bool g_anyCar = false;         // há carros-fantoche criados (para remover ao desconectar)
+double g_outSince = 0;         // fora de carro desde (para não piscar ao trocar de carro)
 
 }  // namespace
 
@@ -101,9 +116,11 @@ void fillLocal(bool settled, net::PlayerState& s) {
     if (!puppet::readLuaText("SodCoop.LocalVehicle()", text) || text.empty()) return;
     char cls[32] = {};
     float p[3], g[3];
-    if (sscanf(text.c_str(), "%31s %f %f %f %f %f %f", cls, &p[0], &p[1], &p[2], &g[0], &g[1], &g[2]) != 7 ||
+    unsigned id = 0;
+    if (sscanf(text.c_str(), "%31s %f %f %f %f %f %f %x", cls, &p[0], &p[1], &p[2], &g[0], &g[1], &g[2], &id) != 8 ||
         !isClassName(cls))
         return;
+    s.vehicleId = id;
     snprintf(s.vehicle, sizeof(s.vehicle), "%s", cls);
     memcpy(s.vehiclePos, p, sizeof(p));
     memcpy(s.vehicleAngles, g, sizeof(g));
@@ -118,17 +135,25 @@ bool updateRemote(const net::RemoteState& remote, bool settled) {
     const double now = clock::seconds();
     const bool inVehicle = remote.connected && remote.state.hasPlayer && isClassName(remote.state.vehicle);
     if (!settled) {
-        g_spawned = false;  // nível descarregado: a entidade já não existe
+        g_driving = g_lastKnownCar = 0;  // nível descarregado: as entidades já não existem
+        g_anyCar = false;
         return inVehicle;
     }
+    if (!remote.connected && g_anyCar) {
+        engine::executeLua("SodCoop.RemoveRemoteVehicles()", "sodcoop_vehicle");
+        log::info("vehicles: carros do outro jogador removidos (desconectado)");
+        g_anyCar = false;
+        g_driving = g_lastKnownCar = 0;
+    }
     if (!inVehicle) {
-        if (g_spawned) {
+        if (g_driving) {
             if (g_outSince == 0) g_outSince = now;
             if (now - g_outSince > 0.5) {
-                engine::executeLua("SodCoop.RemoveRemoteVehicle()", "sodcoop_vehicle");
-                log::info("vehicles: carro do outro jogador removido (saiu do carro)");
-                g_spawned = false;
-                g_spawnedClass.clear();
+                char code[80];
+                snprintf(code, sizeof(code), "SodCoop.ParkRemoteVehicle(%u)", g_driving);
+                engine::executeLua(code, "sodcoop_vehicle");
+                log::info("vehicles: carro %u do outro jogador estacionado (saiu do carro)", g_driving);
+                g_driving = 0;
             }
         }
         g_cur.cls.clear();
@@ -164,14 +189,21 @@ bool updateRemote(const net::RemoteState& remote, bool settled) {
         p[i] = g_prev.pos[i] + (g_cur.pos[i] - g_prev.pos[i]) * k;
         g[i] = wrapAngle(g_prev.ang[i] + wrapAngle(g_cur.ang[i] - g_prev.ang[i]) * k);
     }
+    const uint32_t car = remote.state.vehicleId ? remote.state.vehicleId : 1;
+    if (g_driving && g_driving != car) {  // trocou de carro sem passar 0,5 s a pé
+        char park[80];
+        snprintf(park, sizeof(park), "SodCoop.ParkRemoteVehicle(%u)", g_driving);
+        engine::executeLua(park, "sodcoop_vehicle");
+    }
     char code[256];
-    snprintf(code, sizeof(code), "SodCoop.RemoteVehicle(\"%s\", %.3f, %.3f, %.3f, %.4f, %.4f, %.4f)",
+    snprintf(code, sizeof(code), "SodCoop.RemoteVehicle(%u, \"%s\", %.3f, %.3f, %.3f, %.4f, %.4f, %.4f)", car,
              g_cur.cls.c_str(), p[0], p[1], p[2], g[0], g[1], g[2]);
     const bool ok = engine::executeLua(code, "sodcoop_vehicle");
-    if (ok && (!g_spawned || g_spawnedClass != g_cur.cls)) {
-        log::info("vehicles: carro do outro jogador criado (%s)", g_cur.cls.c_str());
-        g_spawned = true;
-        g_spawnedClass = g_cur.cls;
+    if (ok && g_driving != car) {
+        log::info("vehicles: outro jogador dirigindo o carro %u (%s)%s", car, g_cur.cls.c_str(),
+                  car == g_lastKnownCar ? ", o mesmo de antes" : "");
+        g_driving = g_lastKnownCar = car;
+        g_anyCar = true;
     }
     static int failures = 0;
     if (!ok && ++failures <= 5) log::warn("vehicles: RemoteVehicle falhou (%s)", g_cur.cls.c_str());

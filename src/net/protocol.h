@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 18;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle
+inline constexpr uint16_t kProtocolVersion = 19;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -69,6 +69,7 @@ struct StatePacket {
     char vehicle[32];              // classe do carro em que o remetente está (ex.: Suv_New); vazio = a pé
     float vehiclePos[3];           // posição do carro
     float vehicleAngles[3];        // ângulos do carro (rad)
+    uint32_t vehicleId;            // EntityId do carro no remetente (identifica o carro estacionado)
 };
 inline constexpr int kZombieAnimSize = 32;
 inline constexpr int kZombieModelSize = 64;
