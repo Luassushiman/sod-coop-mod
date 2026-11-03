@@ -57,6 +57,7 @@ Config loadConfig() {
     c.spawnNearHost = GetPrivateProfileIntW(L"net", L"spawn_near_host", 1, ini.c_str()) != 0;
     c.prevMemberKey = GetPrivateProfileIntW(L"keys", L"prev_member", c.prevMemberKey, ini.c_str());
     c.nextMemberKey = GetPrivateProfileIntW(L"keys", L"next_member", c.nextMemberKey, ini.c_str());
+    c.giveItemKey = GetPrivateProfileIntW(L"keys", L"give_item", c.giveItemKey, ini.c_str());
     c.syncTimeOfDay =GetPrivateProfileIntW(L"net", L"sync_time_of_day", 1, ini.c_str()) != 0;
     c.mirrorLocal =GetPrivateProfileIntW(L"puppet", L"mirror_local", 0, ini.c_str()) != 0;
     c.mirrorOffsetX = readFloat(ini, L"puppet", L"mirror_offset_x", c.mirrorOffsetX);

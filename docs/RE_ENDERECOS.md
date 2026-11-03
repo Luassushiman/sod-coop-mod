@@ -212,6 +212,19 @@ Os lugares de vasculhar (armários, gavetas...) quase nunca são entidades (`UL_
 | Recursos por nó | `0x01E22448` + nó*2: {u8 def, u8 qtd}; `0x013AD3C0` cdecl(entrada, n, bool devolver) tira/devolve os lotes de recurso das entradas | VALIDADO-RUNTIME (leitura) | qtd 0 no nó 500 depois da busca |
 | Tirar item do lugar | `ResourceNodeContainerMenuAction` `0x013BB100`; `0x013AD350` (entrada, slot, qtd) | CONFIRMADO-ESTÁTICO | descompilação |
 
+## 4h. Itens, mochila e estoque da base — 2026-11-03
+
+| Item | Valor | Confiança | Evidência |
+|---|---|---|---|
+| Id de item | `(tipo << 28) + índice`; tipo 1 munição, 2 mochila, 3 consumível, 4 arma de fogo, 5 arma branca, 6 outro (`0x01449B90` = `id >> 28`) | VALIDADO-RUNTIME | mesmos ids nas duas cópias |
+| Definições por tipo | ponteiro/registros: 1 `0x01E5AF60`/0xC palavras, 2 `0x01E5AF68`/0xF, 3 `0x01E5AF6C`/0x17, 4 `0x01E5AF80`/0x22, 5 `0x01E5AF90`/0x1C, 6 `0x01E5AF9C`/9 (contagens em `0x01E5AF20`...); `+0x24` nome interno das armas (ex.: `mle_wpn_crowbar`), `+0x08..0x10` sons de UI | VALIDADO-RUNTIME | `0x01449A40` (símbolo -> id) |
+| `NSInventory::Inventory` | vtable `0x0189AE98`; `+4` u32 vagas, `+0x10` u32* id por vaga, `+0x14` dados da vaga (6 bytes: quantidade nos empilháveis; durabilidade/munição nas armas) | VALIDADO-RUNTIME | mochilas lidas nas duas cópias |
+| Métodos (`__thiscall`) | `+0x04` id da vaga, `+0x08` pôr em vaga livre, `+0x0C` empilhar (id, qtd) -> qtd posta, `+0x14` esvaziar vaga, `+0x18` gravar id na vaga, `+0x1C` primeira vaga livre (-1 = cheia), `+0x2C` quantidade da vaga, `+0x4C` total de um id | VALIDADO-RUNTIME (`0C`, `14`, `18`, `1C`) | dar item funcionou |
+| Mochila do sobrevivente atual | `*( *(0x01E658C8) + 0xE8 )` (registro do membro atual) | VALIDADO-RUNTIME | é a que a tela mostra |
+| Outra cópia | `*(0x01E658F0)`: mesma mochila, mas mexer nela **não** muda a tela | VALIDADO-RUNTIME | 1º teste: logs ok, mochila igual |
+| Por item na mochila (console) | `com_addConsumable`/`com_addWeapon` (`0x013DFF70`/`0x013E0790`) -> `0x015A89C0`(inventário, id, qtd, 1.0) no personagem 0 da tabela `0x01E4BC30` (0x270 cada, mochila em `+0x244`; 256 vagas = estoque da comunidade) | CONFIRMADO-ESTÁTICO | descompilação |
+| Estoque da base | "resource data" tipo 9 (`Stockpile.Ammo/Food/Materials/Medicine/Fuel`, símbolos `0x9000001...`); grupos em `*(0x01E1FBF4)`, valores em `+0xC` (0x14 bytes cada, valor em `+8`) codificados: troca de bits + XOR com `*(0x01E1FDAC) ^ *(0x01E1FB54)` (`0x01394740` lê, `0x013A3C30` grava); `0x01394D30` soma respeitando o limite `0x0190D7F0` | VALIDADO-RUNTIME (leitura) | 0 nas duas cópias sem base |
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).

@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 21;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container
+inline constexpr uint16_t kProtocolVersion = 22;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -23,6 +23,7 @@ enum class PacketType : uint8_t {
     Look = 8,     // ambos: partes do personagem (aparência do sobrevivente), a cada 2 s
     Searched = 9, // ambos: lugares de busca já vasculhados (bit por nó), a cada 1 s
     Container = 10, // ambos: o que sobrou num lugar vasculhado (ao mudar e a cada 2 s)
+    Give = 11,    // ambos: item dado ao outro jogador (enviado 3x)
 };
 
 #pragma pack(push, 1)
@@ -119,6 +120,13 @@ struct ContainerPacket {
     uint32_t ids[kContainerSlots];       // id do item ou do recurso (mesmos ids nas duas cópias)
     uint8_t counts[kContainerSlots];     // quantidade de cada
     uint8_t types[kContainerSlots];      // 0 = item, 1 = lote de recurso, 2 = reabastecimento
+};
+struct GivePacket {
+    Header h;
+    uint16_t giveSeq;   // por remetente; o outro lado descarta repetidos
+    uint32_t itemId;    // id do item (tipo << 28 | índice; mesmos ids nas duas cópias)
+    uint8_t data[6];    // dados da vaga: quantidade (empilháveis) ou durabilidade/munição (armas)
+    uint8_t returned;   // 1 = volta para quem deu (não coube na mochila do outro)
 };
 struct LookPacket {
     Header h;

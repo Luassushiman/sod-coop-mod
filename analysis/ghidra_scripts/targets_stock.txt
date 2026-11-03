@@ -1,0 +1,3 @@
+Stockpile.Food
+RD_STOCKPILE_FOOD == UNIQUE_SYM(res)
+Stockpile.Materials

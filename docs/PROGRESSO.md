@@ -323,3 +323,19 @@ Limitações:
 - Prédios inteiros marcados como vasculhados (flag do prédio) não são enviados; só os nós.
 - Lotes de recurso carregados, estoque da base e itens no chão ficam para as próximas etapas.
 
+## Itens — estoque da base (2026-11-03, investigado)
+
+- Achado na memória (`RE_ENDERECOS.md`, 4h), com a codificação do jogo. As duas cópias deram 0 nos cinco recursos: no Breakdown atual ainda não há base ("Encontrar uma nova base"). Sincronizar fica para quando houver base.
+
+## Itens — etapa 2: dar item ao outro jogador (2026-11-03) ✅
+
+- **F8** (`[keys] give_item`) abre o menu "Dar item ao outro jogador" (`src/game/give_menu.cpp`, no estilo do F7): lista a mochila do sobrevivente atual; setas escolhem, Enter dá.
+- O item sai daqui (`ClearSlot`, vtable `+0x14`) e vai pelo pacote `Give` (protocolo v22, 3 cópias, com sequência) com o id e os 6 bytes da vaga. Lá: empilháveis com `+0x0C` (quantidade); armas numa vaga livre (`+0x1C`, `+0x18`) com os mesmos dados (durabilidade/munição). Se não couber, volta para quem deu (`returned`).
+- Rótulos: o jogo não guarda o nome dos consumíveis em texto; o menu mostra o nome interno das armas (`mle wpn crowbar`) e, nos outros, o nome do som (`Item: meds (1)`, `Municao: ammo shell (6)`).
+- Correção no caminho: a 1ª versão usava `*(0x01E658F0)`; os logs mostravam o item saindo e chegando, mas a tela não mudava. A mochila que a tela mostra é a do registro do membro atual (`*(membro + 0xE8)`). O save do host foi restaurado do backup antes do novo teste.
+- Teste com as duas cópias: host deu munição ×6 ao client; client deu o pé de cabra ao host. Os itens saíram de um lado e apareceram no outro. Confirmado pelo usuário.
+
+Limitações:
+- Dá a vaga inteira (a pilha toda).
+- Itens no chão, mochila de recurso carregada e armário da base: não sincronizados.
+

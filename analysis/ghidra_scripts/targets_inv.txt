@@ -1,0 +1,3 @@
+com_addConsumable
+com_inventory
+com_addWeapon

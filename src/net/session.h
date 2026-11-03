@@ -106,6 +106,17 @@ void setLocalSearched(uint16_t nodeCount, const std::vector<uint8_t>& bits);
 // Último recebido; devolve nodeCount (0 = nada ainda).
 uint16_t getRemoteSearched(std::vector<uint8_t>& bits);
 
+// Item dado ao outro jogador (ver GivePacket).
+struct GiveEvent {
+    uint32_t itemId = 0;
+    uint8_t data[6] = {};
+    bool returned = false;
+};
+// Envia um item ao outro lado (3 cópias; quem recebe descarta as repetidas).
+void sendGive(const GiveEvent& g);
+// Itens recebidos desde a última chamada.
+std::vector<GiveEvent> takeGives();
+
 // Conteúdo de um lugar vasculhado (ver ContainerPacket).
 struct ContainerState {
     int32_t node = -1;

@@ -37,6 +37,11 @@ std::vector<HitEvent> g_inHits;    // recebidos; protegido por g_lock
 uint16_t g_hitSeq = 0;             // thread de rede
 uint16_t g_lastHitSeq = 0;         // último recebido (thread de rede)
 bool g_haveHitSeq = false;
+std::vector<GiveEvent> g_outGives;  // protegido por g_lock
+std::vector<GiveEvent> g_inGives;   // protegido por g_lock
+uint16_t g_giveSeq = 0;             // thread de rede
+uint16_t g_lastGiveSeq = 0;         // último recebido (thread de rede)
+bool g_haveGiveSeq = false;
 std::vector<ContainerState> g_outContainers;  // protegido por g_lock
 std::vector<ContainerState> g_inContainers;   // protegido por g_lock
 uint16_t g_localSearchedCount = 0;    // protegido por g_lock
@@ -225,6 +230,39 @@ void sendSearched() {
     send(&p, sizeof(p));
 }
 
+void sendGives() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<GiveEvent> out;
+    out.swap(g_outGives);
+    ReleaseSRWLockExclusive(&g_lock);
+    for (const GiveEvent& g : out) {
+        GivePacket p = {};
+        p.giveSeq = ++g_giveSeq;
+        p.itemId = g.itemId;
+        memcpy(p.data, g.data, sizeof(p.data));
+        p.returned = g.returned ? 1 : 0;
+        for (int i = 0; i < 3; ++i) {  // UDP sem confirmação: cópias reduzem a chance de perda
+            fillHeader(p.h, PacketType::Give);
+            send(&p, sizeof(p));
+        }
+    }
+}
+
+void handleGive(const char* data) {
+    GivePacket p;
+    memcpy(&p, data, sizeof(p));
+    if (g_haveGiveSeq && static_cast<int16_t>(p.giveSeq - g_lastGiveSeq) <= 0) return;  // repetido
+    g_haveGiveSeq = true;
+    g_lastGiveSeq = p.giveSeq;
+    GiveEvent g;
+    g.itemId = p.itemId;
+    memcpy(g.data, p.data, sizeof(g.data));
+    g.returned = p.returned != 0;
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_inGives.size() < 32) g_inGives.push_back(g);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void sendContainerPackets() {
     AcquireSRWLockExclusive(&g_lock);
     std::vector<ContainerState> out;
@@ -304,6 +342,7 @@ void setConnected(bool connected, uint32_t peerId) {
         g_remoteSearchedCount = 0;
         g_remoteSearched.clear();
         g_inContainers.clear();
+        g_haveGiveSeq = false;
     }
     ReleaseSRWLockExclusive(&g_lock);
 }
@@ -381,6 +420,10 @@ void handlePacket(const char* data, int size, const Address& from) {
     if (h.type == PacketType::Zombies && g_cfg.role == Role::Client &&
         size >= (int)offsetof(ZombiesPacket, e)) {
         handleZombies(data, size);
+        return;
+    }
+    if (h.type == PacketType::Give && size >= (int)sizeof(GivePacket)) {
+        handleGive(data);
         return;
     }
     if (h.type == PacketType::Container && size >= (int)sizeof(ContainerPacket)) {
@@ -470,6 +513,7 @@ DWORD WINAPI netThread(LPVOID) {
         }
         if (g_peerKnown) sendHits();
         if (g_peerKnown) sendContainerPackets();
+        if (g_peerKnown) sendGives();
         static double nextSearched = 0;
         if (g_peerKnown && nowSec >= nextSearched) {
             sendSearched();
@@ -583,6 +627,20 @@ std::map<uint32_t, RemoteZombie> getRemoteZombies() {
     std::map<uint32_t, RemoteZombie> copy = g_remoteZombies;
     ReleaseSRWLockExclusive(&g_lock);
     return copy;
+}
+
+void sendGive(const GiveEvent& g) {
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_outGives.size() < 32) g_outGives.push_back(g);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+std::vector<GiveEvent> takeGives() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<GiveEvent> in;
+    in.swap(g_inGives);
+    ReleaseSRWLockExclusive(&g_lock);
+    return in;
 }
 
 void sendContainers(const std::vector<ContainerState>& list) {

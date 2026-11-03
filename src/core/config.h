@@ -64,6 +64,9 @@ struct Config {
     // (member_menu: setas, PgUp/PgDn, Enter). Padrão F7.
     int prevMemberKey = 0x75;
     int nextMemberKey = 0x76;
+    // [keys] give_item: tecla que abre/fecha o menu de dar item ao outro jogador
+    // (give_menu: setas, Enter). Padrão F8.
+    int giveItemKey = 0x77;
     AnimConfig anim;
     // [window] x, y, width, height (width/height 0 = não mexe na janela)
     window_keeper::Rect window;
