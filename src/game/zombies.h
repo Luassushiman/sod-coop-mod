@@ -28,7 +28,7 @@ struct Config {
     float shotDamage = 60.0f;   // por tiro do cliente
     // Perseguição do jogador do cliente (a IA do jogo só persegue o jogador do host).
     bool chase = true;
-    float aggroRadius = 10.0f;   // m do cliente para o mod assumir o zumbi
+    float aggroRadius = 15.0f;   // m do cliente para o mod assumir o zumbi (= raio de ativação)
     float attackDamage = 8.0f;   // por golpe de zumbi no jogador do cliente
     // Ativar também os zumbis perto do cliente (zombie_activation), e não só os perto do host.
     bool clientActivation = true;

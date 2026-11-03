@@ -148,7 +148,7 @@ Achados úteis: a percepção (`DeterminePerception`, `0x01321D20`) é calculada
 ## Zumbis — etapa 2c: zumbis do host atacam o client (2026-11-02) ✅
 
 Como a IA do jogo só persegue o jogador do host, o mod conduz os zumbis perto do client (função Lua `SodCoop.ZChase`, a cada frame no host):
-- Assume o zumbi vivo a menos de `[zombies] aggro_radius` (10 m) do jogador do client e mais perto dele do que do host; solta quando o client passa de 16 m ou o host fica 3 m mais perto.
+- Assume o zumbi vivo a menos de `[zombies] aggro_radius` (15 m desde 2026-11-03; antes 10 m) do jogador do client e mais perto dele do que do host; solta quando o client passa de aggro_radius + 6 m ou o host fica 3 m mais perto.
 - Vira para o client e corre (`SetWorldPos`): 3,5 m/s; Feral 6,5; Juggernaut 2,8; Bloater 2,2. A altura acompanha a do client.
 - Para a 1,3 m e golpeia (até 1,6 m) a cada 1,8 s, alternando `ZombieMelee_strike_left_fast`, `_strike_right_fast` e `_attack_close` (nomes lidos da memória do host; os paks são cifrados).
 - A animação escolhida vai no `ZombieEntry.anim` (o fantoche do client mostra a corrida e o golpe).
@@ -355,7 +355,7 @@ Limitações:
 
 Pendências:
 - A fila tem 24 vagas para os dois jogadores: com muitos zumbis perto do client, os do host podem demorar a ativar (não observado).
-- Zumbis ativados longe do host ainda seguem a IA do jogo, que só persegue o host; quem os leva ao client é o `ZChase` (até `aggro_radius`, 10 m).
+- Zumbis ativados longe do host ainda seguem a IA do jogo, que só persegue o host; quem os leva ao client é o `ZChase` (até `aggro_radius`, 15 m, o mesmo raio da ativação; confirmado pelo usuário em 2026-11-03).
 - Golpe visível no host (fantoche no host).
 
 - **Aparência dos zumbis no client (resolvido, protocolo v23):** o host lê as partes de pele e os materiais de cada zumbi (`appearance::describe`, o mesmo do `Look` do jogador; ex.: mulher com `body`, `head`, `hair`... sobre `characters/female/zombie/skeleton/skeleton.chr`), relendo a cada 3 s (0,3 s enquanto o jogo ainda não prendeu as partes). Manda o texto no pacote `ZombieLook` e o hash dele em `ZombieEntry.lookHash`. O client espera a aparência (até 1 s; 3,5 s se o hash já é conhecido), cria o fantoche com o esqueleto do host e prende as partes (`appearance::attachParts`); sem ela, usa o modelo simplificado e recria o fantoche quando a aparência chega ou muda (nunca troca partes de um personagem em uso). No máximo 4 fantoches criados por frame. Confirmado pelo usuário: zumbis iguais nas duas telas (testado com poucos zumbis).

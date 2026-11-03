@@ -52,7 +52,7 @@ Config loadConfig() {
     c.zombies.meleeDamage = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"melee_damage", 35, ini.c_str()));
     c.zombies.shotDamage = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"shot_damage", 60, ini.c_str()));
     c.zombies.chase = GetPrivateProfileIntW(L"zombies", L"chase", 1, ini.c_str()) != 0;
-    c.zombies.aggroRadius = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"aggro_radius", 10, ini.c_str()));
+    c.zombies.aggroRadius = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"aggro_radius", 15, ini.c_str()));
     c.zombies.clientActivation = GetPrivateProfileIntW(L"zombies", L"client_activation", 1, ini.c_str()) != 0;
     c.zombies.clientPointType = GetPrivateProfileIntW(L"zombies", L"client_point_type", -1, ini.c_str());
     c.zombies.clientPointIndex = GetPrivateProfileIntW(L"zombies", L"client_point_index", 99, ini.c_str());
