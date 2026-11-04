@@ -56,5 +56,8 @@ bool clientRise(const engine::Vec3& host);
 // e manda o dano ao host. yaw = direção do corpo; aimDir = direção da mira (tiro).
 void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,
                    const engine::Vec3& aimDir);
+// Cliente: granadas do jogador local (ULGrenade_*). Quando uma some (explodiu), os zumbis do
+// host perto do ponto recebem dano. A cada 0,1 s.
+void updateGrenades(const Config& cfg, bool settled);
 
 }  // namespace sodcoop::zombies

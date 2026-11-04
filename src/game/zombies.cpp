@@ -270,6 +270,29 @@ function SodCoop.MeleeAssist(x, y)
   if dx * dx + dy * dy < 0.0025 then return end
   a:SetWorldAngles({ x = 0, y = 0, z = math.atan2(-dx, dy) })
 end
+-- Cliente: granadas do jogador local (entidades ULGrenade_*, ex.: ULGrenade_PipeBombStrong).
+-- A que sumiu explodiu: devolve "classe,x,y,z;" de cada uma (posição da última leitura).
+SodCoop.gTrack = SodCoop.gTrack or {}
+function SodCoop.GrenadeWatch()
+  local a = g_localActor
+  if not a then return "" end
+  local seen, out = {}, ""
+  for _, e in ipairs(System.GetEntitiesInSphere(a:GetWorldPos(), 80) or {}) do
+    local c = tostring(e.class)
+    if string.sub(c, 1, 9) == "ULGrenade" then
+      local p = e:GetWorldPos()
+      SodCoop.gTrack[e.id] = { c = c, x = p.x, y = p.y, z = p.z }
+      seen[e.id] = true
+    end
+  end
+  for id, t in pairs(SodCoop.gTrack) do
+    if not seen[id] then
+      out = out .. string.format("%s,%.2f,%.2f,%.2f;", t.c, t.x, t.y, t.z)
+      SodCoop.gTrack[id] = nil
+    end
+  end
+  return out
+end
 function SodCoop.ZAlive(id)
   local e = SodCoop.zp[id]
   return e ~= nil and System.GetEntity(e.id) ~= nil
@@ -856,9 +879,55 @@ bool clientRise(const engine::Vec3& host) {
     return ok;
 }
 
+void updateGrenades(const Config& cfg, bool settled) {
+    static double next = 0;
+    const double now = clock::seconds();
+    if (!cfg.enabled || !settled || now < next) return;
+    next = now + 0.1;
+    std::string out;
+    if (!puppet::readLuaText("SodCoop.GrenadeWatch()", out) || out.empty()) return;
+    size_t start = 0;
+    while (start < out.size()) {
+        size_t end = out.find(';', start);
+        if (end == std::string::npos) end = out.size();
+        const std::string item = out.substr(start, end - start);
+        start = end + 1;
+        char cls[64] = {};
+        float x = 0, y = 0, z = 0;
+        const size_t comma = item.find(',');
+        if (comma == std::string::npos || comma >= sizeof(cls) ||
+            sscanf(item.c_str() + comma + 1, "%f,%f,%f", &x, &y, &z) != 3)
+            continue;
+        memcpy(cls, item.data(), comma);
+        // Molotov queima (dano menor); as outras explodem (mata quem estiver perto).
+        const bool fire = strstr(cls, "Molotov") != nullptr;
+        const float radius = fire ? 4.0f : 6.0f, damage = fire ? 60.0f : 400.0f;
+        int hits = 0;
+        for (const auto& [id, p] : g_puppets) {
+            if (p.dead) continue;
+            const float dx = p.pos.x - x, dy = p.pos.y - y, dz = p.pos.z - z;
+            if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
+            net::HitEvent hit;
+            hit.zombieId = id;
+            hit.kind = static_cast<uint8_t>(AttackKind::Shot);
+            hit.damage = damage;
+            deliverHit(hit);
+            ++hits;
+        }
+        log::info("zombies: %s do cliente explodiu em (%.1f, %.1f, %.1f): %d zumbi(s) a ate %.0f m, %.0f de dano",
+                  cls, x, y, z, hits, radius, damage);
+    }
+}
+
 void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,
                    const engine::Vec3& aimDir) {
-    if (!cfg.enabled || g_puppets.empty()) return;
+    if (!cfg.enabled || g_puppets.empty()) {
+        static int logged = 0;
+        if (logged++ < 10)
+            log::info("zombies: %s do cliente ignorado (%s)", kind == AttackKind::Melee ? "golpe" : "tiro",
+                      cfg.enabled ? "nenhum fantoche de zumbi" : "zumbis desligados");
+        return;
+    }
     // Assistência de golpe: acha o zumbi até 3,5 m e ~80 graus para cada lado e vira o jogador
     // para ele (SodCoop.MeleeAssist), como o jogo faz no host.
     constexpr float kMeleeRange = 3.5f;     // m, horizontal

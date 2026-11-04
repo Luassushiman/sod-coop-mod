@@ -72,6 +72,11 @@ Ajustes da mira (2026-11-01):
 - Mira para baixo (parado, arma longa): inclinação calculada do alvo do IK do remetente; abaixo de -15° (volta acima de -10°) usa `Story_ar02_Quarantine_Approach_Soldier_StandAim_Down`. ✅ confirmado pelo usuário com a espingarda.
 - Pistola: idle `relaxed_idle_pistol` + `Gun_shoot_revolver` parado em t=0,15 na camada 1 (braço estendido). ✅ confirmado em 2026-11-04 com a M9, parado e andando ("mira certo"). A M9 vem do armário: `com_addGun Pistol_M9` no host.
 
+### Tiro e granada do client dão dano (2026-11-04) ✅
+
+- **Tiro:** antes, o client só mandava dano quando tocava uma animação `Gun_shoot*`. A pistola não tem essa animação, e a arma automática não recomeça a animação a cada bala, então quase nenhum tiro virava dano. Agora cada bala conta pela munição do pente que cai (`g_gunShots`, mesma leitura da animação da pistola) e vira um tiro na linha da mira (`zombies::onLocalAttack`, 60 de dano). Testado com a espingarda Dragon: 3 tiros, 3 acertos, aplicados no host 0,01 s depois; os zumbis morreram nas duas telas. Tiro sem fantoche de zumbi por perto agora fica no log ("ignorado").
+- **Granada:** a explosão do client só acontecia no client, onde os zumbis são fantoches. O client acompanha as entidades `ULGrenade_*` (ex.: `ULGrenade_PipeBombStrong`) num raio de 80 m (`SodCoop.GrenadeWatch`, a cada 0,1 s). A que some explodiu na última posição lida, e os zumbis a até 6 m recebem 400 de dano (Molotov: 4 m e 60, ainda não testada). Testado: uma PipeBomb pegou 4 zumbis, que morreram nas duas telas.
+
 ### Pistola: arma visível, tiro e efeitos (2026-11-04) ✅
 
 - **Arma invisível no fantoche.** Desde que o fantoche passou a ser montado com esqueleto e partes (aparência, 2026-11-02), nenhum `.cgf` preso com `CreateBoneAttachment` + `SetAttachmentCGF` aparece. Foram testados pistola, espingarda e pé de cabra, na cabeça e na mão; `GetAttachmentCGF` devolve o caminho, mas nada é desenhado. A mesma M9 como `BasicEntity` solta aparece. Correção: a arma é uma `BasicEntity` própria (`sodcoop_puppet_weapon`) presa no `weapon_bone` com `SetAttachmentObject(0, nome, id, -1, 0)`; vale para todas as armas.

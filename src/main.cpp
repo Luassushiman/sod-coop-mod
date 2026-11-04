@@ -155,9 +155,12 @@ const std::string& localWeapon(bool inWorld, DWORD now) {
     return weapon;
 }
 
-// Tiros de pistola do jogador local, contados pela munição do pente que cai (lida a cada
-// 50 ms). A pistola não tem animação de tiro nas camadas do jogador; o outro lado toca
-// uma no fantoche. Só conta com a aim pose de pistola (fuzil e espingarda já têm a sua).
+// Tiros do jogador local, contados pela munição do pente que cai (lida a cada 50 ms).
+// g_gunShots: qualquer arma de fogo (vira dano nos zumbis do host; a animação de tiro não
+// serve: a pistola não tem, e a arma automática não recomeça a animação a cada bala).
+// Devolve só os de pistola (aim pose de pistola), que não têm animação: o outro lado toca
+// uma no fantoche (fuzil e espingarda já têm a sua).
+uint16_t g_gunShots = 0;
 uint16_t localPistolShots(bool inWorld, DWORD now) {
     static uint16_t shots = 0;
     static std::string lastItem;
@@ -176,6 +179,12 @@ uint16_t localPistolShots(bool inWorld, DWORD now) {
     const std::string item = colon == std::string::npos ? std::string() : text.substr(0, colon);
     const int ammo = colon == std::string::npos ? -1 : atoi(text.c_str() + colon + 1);
     const bool pistol = strcmp(anim_watch::currentAimPose().name, "AimPoses_pistol") == 0;
+    if (item == lastItem && lastAmmo > 0 && ammo >= 0 && ammo < lastAmmo && lastAmmo - ammo <= 5)
+    {
+        g_gunShots = static_cast<uint16_t>(g_gunShots + (lastAmmo - ammo));
+        static int logged = 0;
+        if (logged++ < 30) log::info("arma: tiro %u de %s (pente %d -> %d)", g_gunShots, item.c_str(), lastAmmo, ammo);
+    }
     if (pistol && item == lastItem && lastAmmo > 0 && ammo >= 0 && ammo < lastAmmo) {
         shots = static_cast<uint16_t>(shots + 1);
         static int logged = 0;
@@ -384,8 +393,8 @@ bool localDead(engine::EntityId id) {
     return dead;
 }
 
-// Cliente: golpes (ação da camada 0 de arma branca) e tiros (camada 1 "Gun_shoot*")
-// do jogador local viram dano nos zumbis do host.
+// Cliente: golpes (ação da camada 0 de arma branca) e tiros (munição do pente que cai,
+// g_gunShots) do jogador local viram dano nos zumbis do host.
 bool isMeleeAnim(const char* name) {
     std::string l = name;
     for (char& c : l) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
@@ -396,15 +405,10 @@ bool isMeleeAnim(const char* name) {
     return false;
 }
 
-bool isShotAnim(const char* name) {
-    return strncmp(name, "Gun_shoot", 9) == 0 || strncmp(name, "Shoot_", 6) == 0;
-}
-
 void detectLocalAttacks(bool settled, const local_player::Snapshot& s, const net::PlayerState& mine) {
-    static uint16_t lastAction = 0, lastUpper = 0;
+    static uint16_t lastAction = 0, lastShots = 0;
     static bool primed = false;
     const anim_watch::Action& action = anim_watch::currentAction();
-    const anim_watch::Action& upper = anim_watch::currentUpper();
     if (!settled) {
         primed = false;
         return;
@@ -412,7 +416,7 @@ void detectLocalAttacks(bool settled, const local_player::Snapshot& s, const net
     if (!primed) {  // não conta o que já estava tocando ao entrar no mundo
         primed = true;
         lastAction = action.seq;
-        lastUpper = upper.seq;
+        lastShots = g_gunShots;
         return;
     }
     if (action.seq != lastAction) {
@@ -420,14 +424,14 @@ void detectLocalAttacks(bool settled, const local_player::Snapshot& s, const net
         if (isMeleeAnim(action.name))
             zombies::onLocalAttack(g_cfg.zombies, zombies::AttackKind::Melee, s.pos, s.angles.z, {});
     }
-    if (upper.seq != lastUpper) {
-        lastUpper = upper.seq;
-        if (isShotAnim(upper.name)) {
-            // Direção da mira: alvo do IK de mira (relativo à posição) menos a altura do peito.
-            const engine::Vec3 dir{mine.aimOffset[0], mine.aimOffset[1], mine.aimOffset[2] - 1.4f};
-            zombies::onLocalAttack(g_cfg.zombies, zombies::AttackKind::Shot, s.pos, s.angles.z, dir);
-        }
+    // Um ataque por bala (no máximo 5 de uma vez: rajada entre duas leituras).
+    for (int n = 0; lastShots != g_gunShots && n < 5; ++n) {
+        lastShots = static_cast<uint16_t>(lastShots + 1);
+        // Direção da mira: alvo do IK de mira (relativo à posição) menos a altura do peito.
+        const engine::Vec3 dir{mine.aimOffset[0], mine.aimOffset[1], mine.aimOffset[2] - 1.4f};
+        zombies::onLocalAttack(g_cfg.zombies, zombies::AttackKind::Shot, s.pos, s.angles.z, dir);
     }
+    lastShots = g_gunShots;
 }
 
 // Thread principal do jogo, uma vez por frame.
@@ -645,6 +649,7 @@ void onFrame() {
         if (settled && remote.connected && remote.state.hasPlayer)
             zombies::clientRise({remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]});
         detectLocalAttacks(settled, s, mine);
+        zombies::updateGrenades(g_cfg.zombies, settled);
     }
 }
 
