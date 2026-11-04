@@ -11,6 +11,7 @@
 #include "core/clock.h"
 #include "core/log.h"
 #include "net/steam_p2p.h"
+#include "net/upnp.h"
 #include "net/protocol.h"
 #include "net/udp_socket.h"
 
@@ -716,6 +717,8 @@ bool start(const SessionConfig& cfg) {
     } else if (cfg.role == Role::Host) {
         if (!g_socket.open(cfg.bindHost, cfg.port)) return false;
         log::info("net: host escutando em %s:%u (id %08X)", cfg.bindHost.c_str(), cfg.port, g_myId);
+        // Escutando só nesta máquina (127.0.0.1) não adianta abrir porta no roteador.
+        if (cfg.upnp && cfg.bindHost != "127.0.0.1") upnp::openPort(cfg.port);
     } else {
         if (!g_socket.open(cfg.bindHost, 0)) return false;
         if (!resolve(cfg.hostAddress, cfg.port, g_peerAddr)) {
@@ -740,6 +743,7 @@ void stop() {
     }
     g_socket.close();
     g_steam.close();
+    upnp::closePort();
     timeEndPeriod(1);
 }
 

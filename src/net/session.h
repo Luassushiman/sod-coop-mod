@@ -27,6 +27,7 @@ struct SessionConfig {
     // [net] transport: "udp" (IP e porta) ou "steam" (P2P da Steam, sem abrir porta).
     bool steam = false;
     uint64_t steamPeer = 0;  // [net] steam_peer: SteamID64 do outro jogador
+    bool upnp = true;        // [net] upnp: host por UDP abre a porta no roteador sozinho
 };
 
 struct PlayerState {

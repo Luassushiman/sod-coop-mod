@@ -30,6 +30,9 @@
 sodcoop_*.log
 *.ulsave
 
+# Fundo opcional do SoDCoop.exe (imagem de quem usa; a capa do jogo não vai para o repositório)
+SoDCoop_fundo.*
+
 # Sistema
 Thumbs.db
 desktop.ini

@@ -77,6 +77,7 @@ a0c80cfc-ec1f-4183-9b24-1c29d5a50471
 |---|---|
 | `src/` | DLL do mod (proxy de `dinput8.dll`, x86): `core/` (log, configuração, relógio, janela), `game/` (motor, jogador local, personagem remoto, hooks por frame), `net/` (protocolo UDP e sessão), `proxy/` |
 | `build.ps1` | Compila `build\dinput8.dll` |
+| `launcher/` / `build_launcher.ps1` | SoDCoop.exe: janela para configurar o co-op (host/client, Steam/IP, UPnP) e abrir o jogo |
 | `mods/resolution_1440p/` | Mod à parte que põe 2560×1440 no menu de opções (sem o co-op) |
 | `install.ps1` | Instala/remove o mod nas cópias de teste |
 | `package.ps1` / `release/` | Gera o pacote para jogar (`build\release\sodcoop-<data>.zip`: DLL, `sodcoop.ini` modelo e LEIA-ME) |

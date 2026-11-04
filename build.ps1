@@ -26,6 +26,6 @@ foreach ($f in Get-ChildItem "$root\src" -Recurse -Filter *.cpp) {
     & $cxx @cxxflags -c $f.FullName -o $o; if ($LASTEXITCODE) { throw "falha: $($f.Name)" }
     $objects += $o
 }
-& $cxx -shared -static -s -o "$out\dinput8.dll" @objects "$root\src\proxy\dinput8.def" -lbcrypt -lws2_32 -lwinmm
+& $cxx -shared -static -s -o "$out\dinput8.dll" @objects "$root\src\proxy\dinput8.def" -lbcrypt -lws2_32 -lwinmm -lole32 -loleaut32 -luuid
 if ($LASTEXITCODE) { throw "falha no link" }
 Get-Item "$out\dinput8.dll" | Select-Object FullName, Length

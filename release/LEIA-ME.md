@@ -9,18 +9,29 @@ Co-op para **duas pessoas** no modo **Breakdown** do State of Decay: Year-One Su
 | Arquivo | Para quê |
 |---|---|
 | `dinput8.dll` | O mod. O jogo carrega sozinho quando ela está na pasta. |
-| `sodcoop.ini` | Configuração: quem é o host, quem é o client, IP e porta. |
+| `SoDCoop.exe` | Janela para configurar o co-op e abrir o jogo, sem editar o `.ini`. |
+| `sodcoop.ini` | Configuração: quem é o host, quem é o client, IP e porta. A janela grava aqui. |
 
 ## Instalação (nos dois PCs)
 
 1. Abra a pasta do jogo, a do `StateOfDecay.exe`. Em geral é `C:\Program Files (x86)\Steam\steamapps\common\State of Decay YOSE`.
-2. Copie a `dinput8.dll` e o `sodcoop.ini` para lá.
-3. Edite o `sodcoop.ini`:
+2. Copie a `dinput8.dll`, o `SoDCoop.exe` e o `sodcoop.ini` para lá.
+3. Abra o **SoDCoop.exe** e escolha:
+   - **Criar a partida** (host) ou **Entrar na partida do amigo** (client);
+   - **Pela Steam**, o recomendado, ou **Por IP direto**;
+   - pela Steam, o **SteamID64 do amigo**. O seu aparece na própria janela, com o botão **Copiar** para mandar a ele;
+   - por IP, o host pode usar **Testar porta (UPnP)**, e o mod tenta abrir a porta no roteador sozinho. A janela mostra o IP para passar ao amigo, ou avisa se a sua internet usa CGNAT, em que só a Steam funciona.
+
+   Depois clique em **Salvar e jogar**. Se a pasta do jogo estiver em "Arquivos de Programas" e a janela não conseguir salvar, abra o SoDCoop.exe como administrador.
+
+   Fundo opcional: coloque uma imagem `SoDCoop_fundo.jpg` ou `.png` ao lado do `SoDCoop.exe`, e ela vira o fundo da janela.
+
+   Se preferir editar o `sodcoop.ini` à mão:
    - **Host**, quem cria a partida, usa `role=host`. **Client**, quem entra, usa `role=client`.
    - **Pela Steam**, o recomendado: deixe `transport=steam` e, em `steam_peer=`, ponha o **SteamID64 do outro jogador**. É um número de 17 dígitos, que começa com 7656119. Para descobrir o seu, abra o jogo uma vez com o mod e procure no log a linha `seu SteamID64 = ...`, ou cole o link do seu perfil em um site como steamid.io.
    - **Por IP**: use `transport=udp`. O host usa `bind=0.0.0.0`, e o client põe o IP do host em `host=`.
 
-Para remover, apague a `dinput8.dll` e o `sodcoop.ini`. O jogo volta ao normal, e nenhum arquivo original é alterado.
+Para remover, apague a `dinput8.dll`, o `SoDCoop.exe` e o `sodcoop.ini`. O jogo volta ao normal, e nenhum arquivo original é alterado.
 
 ## Antes de jogar: o mesmo mundo nos dois
 
@@ -42,7 +53,7 @@ Com `transport=steam`, **não precisa abrir porta**: a Steam conecta os dois PCs
 
 Com `transport=udp`, a conexão é direta:
 
-- O **host** libera a porta **UDP 27650** no roteador (encaminhamento de porta) e passa o **IP público** dele para o client.
+- O mod tenta abrir a porta **UDP 27650** no roteador sozinho, por UPnP, quando o host joga por IP. Se o roteador não aceitar, o **host** libera a porta à mão (encaminhamento de porta) e passa o **IP público** dele para o client.
 - Outra opção é usar um programa de rede virtual, como Radmin VPN, ZeroTier ou Tailscale. Aí o client usa o IP que o programa mostra para o host.
 
 ## O que funciona
