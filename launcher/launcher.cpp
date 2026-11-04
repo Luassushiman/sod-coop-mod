@@ -23,8 +23,112 @@ constexpr unsigned long long kSteamIdBase = 76561197960265728ULL;
 
 enum Id {
     kHost = 101, kClient, kSteam, kUdp, kMyId, kCopy, kPeer, kHostIp, kPort, kTest, kStatus, kSave, kPlay,
-    kLblPeer, kLblHostIp, kLblPort, kLblHost = 200, kLblClient, kLblSteam, kLblUdp, kTestDone = WM_APP + 1
+    kLblPeer, kLblHostIp, kLblPort, kLblHost = 200, kLblClient, kLblSteam, kLblUdp, kLblTitle, kLblYou, kLblConn,
+    kLblMyId, kLang, kLblLang, kTestDone = WM_APP + 1
 };
+
+// Textos da janela em português e inglês. Idioma: o salvo em [launcher] language do
+// sodcoop.ini; na primeira vez, o do Windows (português -> pt; outros -> en).
+enum S {
+    sTitle, sYou, sHost, sClient, sConn, sSteam, sUdp, sMyId, sCopy, sPeer, sHostIp, sPort, sTest, sSave, sPlay,
+    sHintSteam, sHintHostUdp, sHintClientUdp, sBadPeer, sOwnPeer, sBadPort, sNoHostIp, sCantSave, sSaved, sCopied,
+    sTesting, sTestOk1, sTestOk2, sTestOk3, sTestCgnat1, sTestCgnat2, sTestFail1, sTestFail2, sOpening, sNoSteam,
+    sNotGameDir, sNoDll, sLang, sCount
+};
+const wchar_t* const kStrings[2][sCount] = {
+    {
+        L"Co-op do State of Decay: Year-One",
+        L"Você",
+        L"Criar a partida (host): o amigo entra no seu mundo",
+        L"Entrar na partida do amigo (client)",
+        L"Conexão",
+        L"Pela Steam (recomendado: não precisa abrir porta)",
+        L"Por IP direto (rede local, ou porta aberta no roteador)",
+        L"Seu SteamID64:",
+        L"Copiar",
+        L"SteamID64 do amigo:",
+        L"IP do host:",
+        L"Porta UDP:",
+        L"Testar porta (UPnP)",
+        L"Salvar",
+        L"Salvar e jogar",
+        L"Pela Steam: os dois precisam estar logados na Steam. Cada um põe aqui o SteamID64 do OUTRO (o seu "
+        L"aparece acima; mande para o amigo).",
+        L"Por IP: o amigo precisa do seu IP público e da porta UDP aberta no roteador. Use \"Testar porta\" para o "
+        L"mod tentar abrir sozinho (UPnP).",
+        L"Por IP: ponha o IP que o host te passou (rede local ou público) e a mesma porta dele.",
+        L"O SteamID64 do amigo tem 17 dígitos e começa com 7656119.\nEle aparece nesta mesma janela, no PC dele.",
+        L"Esse é o SEU SteamID64. Coloque o do amigo.",
+        L"Porta inválida (use entre 1024 e 65535; o padrão é 27650).",
+        L"Ponha o IP do host.",
+        L"Não consegui gravar o sodcoop.ini.\nSe o jogo está em Arquivos de Programas, abra o SoDCoop.exe como "
+        L"administrador.",
+        L"Configuração salva em sodcoop.ini.",
+        L"SteamID64 copiado. Mande para o amigo (Discord, WhatsApp...).",
+        L"Procurando o roteador e pedindo para abrir a porta... (pode levar alguns segundos)",
+        L"Deu certo: o roteador abriu a porta. Passe para o amigo o IP ",
+        L" e a porta ",
+        L". (IP deste PC na rede local: ",
+        L"O roteador abriu a porta, mas o IP dele (",
+        L") é da operadora (CGNAT): de fora ninguém chega. Use \"Pela Steam\".",
+        L"Não deu: o roteador não abriu a porta. Ative o UPnP no roteador, libere a porta UDP nele, ou use \"Pela "
+        L"Steam\". (IP local: ",
+        L")",
+        L"Abrindo o jogo pela Steam. O host entra no mundo primeiro; depois o amigo.",
+        L"(abra a Steam e reabra esta janela)",
+        L"Coloque o SoDCoop.exe na pasta do jogo (a do StateOfDecay.exe), junto com a dinput8.dll e o sodcoop.ini "
+        L"do mod.",
+        L"A dinput8.dll do mod não está nesta pasta: sem ela o jogo abre sem o co-op.",
+        L"Idioma:",
+    },
+    {
+        L"State of Decay: Year-One Co-op",
+        L"You",
+        L"Create the game (host): your friend joins your world",
+        L"Join your friend's game (client)",
+        L"Connection",
+        L"Through Steam (recommended: no port to open)",
+        L"Direct IP (local network, or port open on the router)",
+        L"Your SteamID64:",
+        L"Copy",
+        L"Friend's SteamID64:",
+        L"Host IP:",
+        L"UDP port:",
+        L"Test port (UPnP)",
+        L"Save",
+        L"Save and play",
+        L"Through Steam: both players must be logged in to Steam. Each one puts the OTHER player's SteamID64 here "
+        L"(yours is shown above; send it to your friend).",
+        L"Direct IP: your friend needs your public IP and the UDP port open on the router. Use \"Test port\" so the "
+        L"mod tries to open it by itself (UPnP).",
+        L"Direct IP: enter the IP the host gave you (local network or public) and the same port as the host.",
+        L"Your friend's SteamID64 has 17 digits and starts with 7656119.\nIt is shown in this same window, on your "
+        L"friend's PC.",
+        L"That is YOUR SteamID64. Enter your friend's.",
+        L"Invalid port (use 1024 to 65535; the default is 27650).",
+        L"Enter the host's IP.",
+        L"Could not save sodcoop.ini.\nIf the game is under Program Files, run SoDCoop.exe as administrator.",
+        L"Settings saved to sodcoop.ini.",
+        L"SteamID64 copied. Send it to your friend (Discord, WhatsApp...).",
+        L"Looking for the router and asking it to open the port... (this can take a few seconds)",
+        L"It worked: the router opened the port. Give your friend the IP ",
+        L" and the port ",
+        L". (This PC's local IP: ",
+        L"The router opened the port, but its IP (",
+        L") belongs to your provider (CGNAT): nobody can reach you from outside. Use \"Through Steam\".",
+        L"It didn't work: the router did not open the port. Turn on UPnP on the router, forward the UDP port on it, "
+        L"or use \"Through Steam\". (Local IP: ",
+        L")",
+        L"Starting the game through Steam. The host enters the world first, then the friend.",
+        L"(open Steam and reopen this window)",
+        L"Put SoDCoop.exe in the game folder (the one with StateOfDecay.exe), together with the mod's dinput8.dll "
+        L"and sodcoop.ini.",
+        L"The mod's dinput8.dll is not in this folder: without it the game starts without co-op.",
+        L"Language:",
+    },
+};
+int g_lang = 0;  // 0 = português, 1 = inglês
+const wchar_t* T(S id) { return kStrings[g_lang][id]; }
 
 HWND g_wnd = nullptr;
 HFONT g_font = nullptr, g_bold = nullptr;
@@ -150,35 +254,27 @@ void refresh() {
     EnableWindow(item(kPort), !steam);
     EnableWindow(item(kLblPort), !steam);
     EnableWindow(item(kTest), !steam && host);
-    if (steam)
-        status(L"Pela Steam: os dois precisam estar logados na Steam. Cada um põe aqui o SteamID64 do OUTRO "
-               L"(o seu aparece acima; mande para o amigo).");
-    else if (host)
-        status(L"Por IP: o amigo precisa do seu IP público e da porta UDP aberta no roteador. Use \"Testar porta\" "
-               L"para o mod tentar abrir sozinho (UPnP).");
-    else
-        status(L"Por IP: ponha o IP que o host te passou (rede local ou público) e a mesma porta dele.");
+    status(T(steam ? sHintSteam : host ? sHintHostUdp : sHintClientUdp));
 }
 
 bool save() {
     const bool host = checked(kHost), steam = checked(kSteam);
     const std::wstring peer = text(kPeer), hostIp = text(kHostIp), port = text(kPort);
     if (steam && !validSteamId(peer)) {
-        MessageBoxW(g_wnd, L"O SteamID64 do amigo tem 17 dígitos e começa com 7656119.\n"
-                           L"Ele aparece nesta mesma janela, no PC dele.", kTitle, MB_ICONWARNING);
+        MessageBoxW(g_wnd, T(sBadPeer), kTitle, MB_ICONWARNING);
         return false;
     }
     if (steam && peer == std::to_wstring(g_myId)) {
-        MessageBoxW(g_wnd, L"Esse é o SEU SteamID64. Coloque o do amigo.", kTitle, MB_ICONWARNING);
+        MessageBoxW(g_wnd, T(sOwnPeer), kTitle, MB_ICONWARNING);
         return false;
     }
     const int p = _wtoi(port.c_str());
     if (!steam && (p < 1024 || p > 65535)) {
-        MessageBoxW(g_wnd, L"Porta inválida (use entre 1024 e 65535; o padrão é 27650).", kTitle, MB_ICONWARNING);
+        MessageBoxW(g_wnd, T(sBadPort), kTitle, MB_ICONWARNING);
         return false;
     }
     if (!steam && !host && hostIp.empty()) {
-        MessageBoxW(g_wnd, L"Ponha o IP do host.", kTitle, MB_ICONWARNING);
+        MessageBoxW(g_wnd, T(sNoHostIp), kTitle, MB_ICONWARNING);
         return false;
     }
     const wchar_t* f = g_ini.c_str();
@@ -192,13 +288,10 @@ bool save() {
         else ok &= WritePrivateProfileStringW(L"net", L"host", hostIp.c_str(), f) != 0;
     }
     if (!ok) {
-        MessageBoxW(g_wnd, (L"Não consegui gravar " + g_ini +
-                            L"\nSe o jogo está em Arquivos de Programas, abra o SoDCoop.exe como administrador.")
-                               .c_str(),
-                    kTitle, MB_ICONERROR);
+        MessageBoxW(g_wnd, T(sCantSave), kTitle, MB_ICONERROR);
         return false;
     }
-    status(L"Configuração salva em sodcoop.ini.");
+    status(T(sSaved));
     return true;
 }
 
@@ -229,47 +322,68 @@ HWND add(const wchar_t* cls, const wchar_t* label, DWORD style, int x, int y, in
 
 void build() {
     int y = 14;
-    SendMessageW(add(L"STATIC", L"Co-op do State of Decay: Year-One", 0, 16, y, 440, 22, 0), WM_SETFONT,
-                 reinterpret_cast<WPARAM>(g_bold), TRUE);
+    SendMessageW(add(L"STATIC", L"", 0, 16, y, 300, 22, kLblTitle), WM_SETFONT, reinterpret_cast<WPARAM>(g_bold),
+                 TRUE);
+    // Idioma: caixa no canto superior direito.
+    add(L"STATIC", L"", SS_RIGHT, 300, y + 3, 60, 20, kLblLang);
+    HWND lang = add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 364, y, 104, 120, kLang);
+    SendMessageW(lang, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Português"));
+    SendMessageW(lang, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"English"));
     y += 34;
     // Botões de escolha sem texto + rótulo ao lado (o texto do botão do Windows não aceita
     // outra cor; o rótulo, sim, e clicar nele marca a opção).
-    auto section = [&](const wchar_t* title) {
-        SendMessageW(add(L"STATIC", title, 0, 16, y, 440, 20, 0), WM_SETFONT, reinterpret_cast<WPARAM>(g_bold),
-                     TRUE);
+    auto section = [&](int id) {
+        SendMessageW(add(L"STATIC", L"", 0, 16, y, 440, 20, id), WM_SETFONT, reinterpret_cast<WPARAM>(g_bold), TRUE);
         y += 26;
     };
-    auto option = [&](int id, int label, const wchar_t* t, bool first) {
+    auto option = [&](int id, int label, bool first) {
         add(L"BUTTON", L"", BS_AUTORADIOBUTTON | (first ? WS_GROUP | WS_TABSTOP : 0), 26, y + 2, 18, 18, id);
-        add(L"STATIC", t, SS_NOTIFY, 48, y + 2, 410, 20, label);
+        add(L"STATIC", L"", SS_NOTIFY, 48, y + 2, 410, 20, label);
         y += 24;
     };
-    section(L"Você");
-    option(kHost, kLblHost, L"Criar a partida (host): o amigo entra no seu mundo", true);
-    option(kClient, kLblClient, L"Entrar na partida do amigo (client)", false);
+    section(kLblYou);
+    option(kHost, kLblHost, true);
+    option(kClient, kLblClient, false);
     y += 8;
-    section(L"Conexão");
-    option(kSteam, kLblSteam, L"Pela Steam (recomendado: não precisa abrir porta)", true);
-    option(kUdp, kLblUdp, L"Por IP direto (rede local, ou porta aberta no roteador)", false);
+    section(kLblConn);
+    option(kSteam, kLblSteam, true);
+    option(kUdp, kLblUdp, false);
     y += 14;
-    add(L"STATIC", L"Seu SteamID64:", 0, 16, y + 3, 140, 20, 0);
+    add(L"STATIC", L"", 0, 16, y + 3, 140, 20, kLblMyId);
     add(L"EDIT", L"", ES_READONLY | ES_AUTOHSCROLL | WS_BORDER, 160, y, 200, 24, kMyId);
-    add(L"BUTTON", L"Copiar", BS_PUSHBUTTON, 368, y, 100, 24, kCopy);
+    add(L"BUTTON", L"", BS_PUSHBUTTON, 368, y, 100, 24, kCopy);
     y += 32;
-    add(L"STATIC", L"SteamID64 do amigo:", 0, 16, y + 3, 140, 20, kLblPeer);
+    add(L"STATIC", L"", 0, 16, y + 3, 140, 20, kLblPeer);
     add(L"EDIT", L"", ES_AUTOHSCROLL | ES_NUMBER | WS_BORDER | WS_TABSTOP, 160, y, 200, 24, kPeer);
     y += 32;
-    add(L"STATIC", L"IP do host:", 0, 16, y + 3, 140, 20, kLblHostIp);
+    add(L"STATIC", L"", 0, 16, y + 3, 140, 20, kLblHostIp);
     add(L"EDIT", L"", ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP, 160, y, 200, 24, kHostIp);
     y += 32;
-    add(L"STATIC", L"Porta UDP:", 0, 16, y + 3, 140, 20, kLblPort);
+    add(L"STATIC", L"", 0, 16, y + 3, 140, 20, kLblPort);
     add(L"EDIT", L"", ES_AUTOHSCROLL | ES_NUMBER | WS_BORDER | WS_TABSTOP, 160, y, 80, 24, kPort);
-    add(L"BUTTON", L"Testar porta (UPnP)", BS_PUSHBUTTON | WS_TABSTOP, 248, y, 220, 24, kTest);
+    add(L"BUTTON", L"", BS_PUSHBUTTON | WS_TABSTOP, 248, y, 220, 24, kTest);
     y += 36;
     add(L"STATIC", L"", SS_LEFT, 16, y, 452, 70, kStatus);
     y += 80;
-    add(L"BUTTON", L"Salvar", BS_PUSHBUTTON | WS_TABSTOP, 236, y, 110, 30, kSave);
-    add(L"BUTTON", L"Salvar e jogar", BS_DEFPUSHBUTTON | WS_TABSTOP, 356, y, 112, 30, kPlay);
+    add(L"BUTTON", L"", BS_PUSHBUTTON | WS_TABSTOP, 236, y, 110, 30, kSave);
+    add(L"BUTTON", L"", BS_DEFPUSHBUTTON | WS_TABSTOP, 356, y, 112, 30, kPlay);
+}
+
+// Põe os textos do idioma atual em todos os controles.
+void applyTexts() {
+    const struct {
+        int id;
+        S text;
+    } labels[] = {{kLblTitle, sTitle}, {kLblYou, sYou},       {kLblHost, sHost},   {kLblClient, sClient},
+                  {kLblConn, sConn},   {kLblSteam, sSteam},   {kLblUdp, sUdp},     {kLblMyId, sMyId},
+                  {kLblPeer, sPeer},   {kLblHostIp, sHostIp}, {kLblPort, sPort},   {kLblLang, sLang}};
+    for (const auto& l : labels) setLabel(l.id, T(l.text));
+    SetWindowTextW(item(kCopy), T(sCopy));
+    SetWindowTextW(item(kTest), T(sTest));
+    SetWindowTextW(item(kSave), T(sSave));
+    SetWindowTextW(item(kPlay), T(sPlay));
+    if (!g_myId) SetWindowTextW(item(kMyId), T(sNoSteam));
+    SendMessageW(item(kLang), CB_SETCURSEL, g_lang, 0);
 }
 
 void load() {
@@ -285,7 +399,7 @@ void load() {
     SetWindowTextW(item(kHostIp), hostIp.c_str());
     SetWindowTextW(item(kPort), iniRead(L"net", L"port", L"27650").c_str());
     g_myId = steamIdFromRegistry();
-    SetWindowTextW(item(kMyId), g_myId ? std::to_wstring(g_myId).c_str() : L"(abra a Steam e reabra esta janela)");
+    SetWindowTextW(item(kMyId), g_myId ? std::to_wstring(g_myId).c_str() : T(sNoSteam));
 }
 
 LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
@@ -293,6 +407,17 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND:
             switch (LOWORD(wp)) {
                 case kHost: case kClient: case kSteam: case kUdp: refresh(); return 0;
+                case kLang:
+                    if (HIWORD(wp) == CBN_SELCHANGE) {
+                        const int sel = static_cast<int>(SendMessageW(item(kLang), CB_GETCURSEL, 0, 0));
+                        if (sel == 0 || sel == 1) {
+                            g_lang = sel;
+                            WritePrivateProfileStringW(L"launcher", L"language", g_lang ? L"en" : L"pt", g_ini.c_str());
+                            applyTexts();
+                            refresh();
+                        }
+                    }
+                    return 0;
                 case kLblHost: case kLblClient: case kLblSteam: case kLblUdp: {
                     const int radio = LOWORD(wp) - kLblHost + kHost;
                     const int other = radio == kHost ? kClient : radio == kClient ? kHost : radio == kSteam ? kUdp : kSteam;
@@ -312,14 +437,14 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                         SetClipboardData(CF_UNICODETEXT, mem);
                     }
                     CloseClipboard();
-                    status(L"SteamID64 copiado. Mande para o amigo (Discord, WhatsApp...).");
+                    status(T(sCopied));
                     return 0;
                 }
                 case kTest: {
                     const int port = _wtoi(text(kPort).c_str());
                     if (port < 1024 || port > 65535) return 0;
                     EnableWindow(item(kTest), FALSE);
-                    status(L"Procurando o roteador e pedindo para abrir a porta... (pode levar alguns segundos)");
+                    status(T(sTesting));
                     if (HANDLE t = CreateThread(nullptr, 0, testWorker, reinterpret_cast<LPVOID>(intptr_t(port)), 0,
                                                 nullptr))
                         CloseHandle(t);
@@ -329,7 +454,7 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
                 case kPlay:
                     if (save()) {
                         ShellExecuteW(w, L"open", L"steam://rungameid/329430", nullptr, nullptr, SW_SHOWNORMAL);
-                        status(L"Abrindo o jogo pela Steam. O host entra no mundo primeiro; depois o amigo.");
+                        status(T(sOpening));
                     }
                     return 0;
             }
@@ -338,15 +463,12 @@ LRESULT CALLBACK proc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             auto* st = reinterpret_cast<sodcoop::net::upnp::Status*>(lp);
             std::wstring s;
             if (st->mapped && !st->cgnat)
-                s = L"Deu certo: o roteador abriu a porta. Passe para o amigo o IP " + widen(st->externalIp) +
-                    L" e a porta " + text(kPort) + L". (IP deste PC na rede local: " + widen(st->localIp) + L")";
-            else if (st->mapped && st->cgnat)
-                s = L"O roteador abriu a porta, mas o IP dele (" + widen(st->externalIp) +
-                    L") é da operadora (CGNAT): de fora ninguém chega. Use \"Pela Steam\".";
-            else
-                s = L"Não deu: " + widen(st->message) +
-                    L". Ative o UPnP no roteador, libere a porta UDP nele, ou use \"Pela Steam\". (IP local: " +
+                s = T(sTestOk1) + widen(st->externalIp) + T(sTestOk2) + text(kPort) + T(sTestOk3) +
                     widen(st->localIp) + L")";
+            else if (st->mapped && st->cgnat)
+                s = T(sTestCgnat1) + widen(st->externalIp) + T(sTestCgnat2);
+            else
+                s = T(sTestFail1) + widen(st->localIp) + T(sTestFail2);
             delete st;
             refresh();
             EnableWindow(item(kTest), checked(kUdp) && checked(kHost));
@@ -394,13 +516,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
     path[n] = 0;
     g_dir = path;
     g_ini = g_dir + L"sodcoop.ini";
+    {
+        wchar_t lang[8] = {};
+        GetPrivateProfileStringW(L"launcher", L"language", L"", lang, 8, g_ini.c_str());
+        if (!wcscmp(lang, L"pt")) g_lang = 0;
+        else if (!wcscmp(lang, L"en")) g_lang = 1;
+        else g_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_PORTUGUESE ? 0 : 1;
+    }
     if (GetFileAttributesW((g_dir + L"StateOfDecay.exe").c_str()) == INVALID_FILE_ATTRIBUTES)
-        MessageBoxW(nullptr, L"Coloque o SoDCoop.exe na pasta do jogo (a do StateOfDecay.exe), junto com a "
-                             L"dinput8.dll e o sodcoop.ini do mod.",
-                    kTitle, MB_ICONWARNING);
+        MessageBoxW(nullptr, T(sNotGameDir), kTitle, MB_ICONWARNING);
     else if (GetFileAttributesW((g_dir + L"dinput8.dll").c_str()) == INVALID_FILE_ATTRIBUTES)
-        MessageBoxW(nullptr, L"A dinput8.dll do mod não está nesta pasta: sem ela o jogo abre sem o co-op.", kTitle,
-                    MB_ICONWARNING);
+        MessageBoxW(nullptr, T(sNoDll), kTitle, MB_ICONWARNING);
 
     NONCLIENTMETRICSW m = {sizeof(m)};
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(m), &m, 0);
@@ -436,6 +562,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
     }
     build();
     load();
+    applyTexts();
     refresh();
     ShowWindow(g_wnd, show);
     MSG msg;

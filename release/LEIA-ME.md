@@ -16,7 +16,7 @@ Co-op para **duas pessoas** no modo **Breakdown** do State of Decay: Year-One Su
 
 1. Abra a pasta do jogo, a do `StateOfDecay.exe`. Em geral é `C:\Program Files (x86)\Steam\steamapps\common\State of Decay YOSE`.
 2. Copie a `dinput8.dll`, o `SoDCoop.exe` e o `sodcoop.ini` para lá.
-3. Abra o **SoDCoop.exe** e escolha:
+3. Abra o **SoDCoop.exe** (a janela segue o idioma do Windows; a caixa **Idioma** no canto superior direito troca entre português e inglês) e escolha:
    - **Criar a partida** (host) ou **Entrar na partida do amigo** (client);
    - **Pela Steam**, o recomendado, ou **Por IP direto**;
    - pela Steam, o **SteamID64 do amigo**. O seu aparece na própria janela, com o botão **Copiar** para mandar a ele;
