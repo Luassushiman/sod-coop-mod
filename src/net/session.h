@@ -143,6 +143,10 @@ std::vector<LockerSlot> takeLocker();
 // Recursos do estoque da base (5 valores). takeResources: o último recebido (false = nenhum novo).
 void sendResources(const float values[5]);
 bool takeResources(float values[5]);
+// Instalações das 32 vagas da base: hash do FacilityId e do VariantId (0 = vazia).
+// takeFacilities: o último recebido (false = nenhum novo).
+void sendFacilities(const uint32_t facility[32], const uint32_t variant[32]);
+bool takeFacilities(uint32_t facility[32], uint32_t variant[32]);
 
 // Aparência de um zumbi do host ("base=esqueleto.chr;anexo=arquivo.chr|material;...").
 struct ZombieLook {

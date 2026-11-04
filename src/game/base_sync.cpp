@@ -28,6 +28,23 @@ constexpr uintptr_t kKeyA = 0x01E1FDAC, kKeyB = 0x01E1FB54;
 constexpr size_t kGroup_Data = 0x0C, kEntrySize = 0x14, kEntry_Value = 0x08;
 constexpr int kResources = 5;
 
+// Instalações: 32 vagas de 0xF0 em 0x01E545E8 (+0x0C tipo, -1 = vazia; +0x10 variante;
+// +0x50 nome da vaga; +0x68 id do handle). Definições em *(0x01E8F1D8), 0x20 cada
+// (+0x04 hash do FacilityId, +0x18 nº de variantes, +0x1C variantes de 0x28 com o hash
+// do VariantId em +0x04). Ver docs/RE_ENDERECOS.md, 4i.
+constexpr uintptr_t kSockets = 0x01E545E8;
+constexpr size_t kSocketStride = 0xF0;
+constexpr int kSocketCount = 32;
+constexpr size_t kSock_Type = 0x0C, kSock_Variant = 0x10, kSock_Name = 0x50, kSock_HandleByte = 0x6A;
+constexpr uintptr_t kFacilityDefs = 0x01E8F1D8, kFacilityDefCount = 0x01E8F1CC;
+constexpr size_t kDefStride = 0x20, kDef_Hash = 0x04, kDef_Variants = 0x1C, kDef_VariantCount = 0x18;
+constexpr size_t kVariantStride = 0x28, kVar_Hash = 0x04;
+// NSHome::Facility::SetFacility (thiscall vaga, byte do handle, hash FacilityId, hash
+// VariantId): monta a instalação sem gastar recursos (o jogo usa ao carregar o save).
+constexpr uintptr_t kSetFacility = 0x015786C0;
+// Demolir pela vaga: cdecl (handle). Handle = 3 << 27 | índice << 15 | id (15 bits).
+constexpr uintptr_t kDestroyFacility = 0x01406520;
+
 constexpr double kInterval = 0.5;      // s entre comparações
 constexpr double kFullInterval = 5.0;  // s entre envios completos do host
 
@@ -125,6 +142,54 @@ bool writeResource(int i, float value) {
     return true;
 }
 
+uintptr_t socketAt(int i) { return kSockets + static_cast<uintptr_t>(i) * kSocketStride; }
+
+bool socketExists(int i) {
+    uintptr_t name = 0;
+    return readAt(socketAt(i) + kSock_Name, name) && name != 0;
+}
+
+// Hashes da instalação de uma vaga (0, 0 = vazia ou ilegível).
+void readFacility(int i, uint32_t& fac, uint32_t& var) {
+    fac = var = 0;
+    int32_t type = -1, variant = 0;
+    uintptr_t defs = 0, variants = 0;
+    uint32_t count = 0, nvar = 0;
+    if (!socketExists(i) || !readAt(socketAt(i) + kSock_Type, type) || type < 0 ||
+        !readAt(socketAt(i) + kSock_Variant, variant) || !readAt(kFacilityDefs, defs) || !defs ||
+        !readAt(kFacilityDefCount, count) || static_cast<uint32_t>(type) >= count)
+        return;
+    const uintptr_t def = defs + type * kDefStride;
+    if (!readAt(def + kDef_Hash, fac)) return;
+    if (readAt(def + kDef_VariantCount, nvar) && variant >= 0 && static_cast<uint32_t>(variant) < nvar &&
+        readAt(def + kDef_Variants, variants) && variants)
+        readAt(variants + variant * kVariantStride + kVar_Hash, var);
+}
+
+void readFacilities(uint32_t fac[kSocketCount], uint32_t var[kSocketCount]) {
+    for (int i = 0; i < kSocketCount; ++i) readFacility(i, fac[i], var[i]);
+}
+
+// Põe na vaga i a instalação (fac, var) do outro lado; fac = 0 só demole.
+void applyFacility(int i, uint32_t fac, uint32_t var) {
+    const uintptr_t s = socketAt(i);
+    int32_t type = -1;
+    readAt(s + kSock_Type, type);
+    if (type >= 0) {
+        uint16_t id = 0;
+        readAt(s + 0x68, id);
+        const uint32_t handle = (3u << 27) | (static_cast<uint32_t>(i) << 15) | (id & 0x7fffu);
+        reinterpret_cast<void(__cdecl*)(uint32_t)>(kDestroyFacility)(handle);
+    }
+    if (fac == 0) return;
+    uint8_t handleByte = 0;
+    readAt(s + kSock_HandleByte, handleByte);
+    using SetFacility_t = void(__thiscall*)(void*, uint8_t, uint32_t, uint32_t);
+    reinterpret_cast<SetFacility_t>(kSetFacility)(reinterpret_cast<void*>(s), handleByte, fac, var);
+}
+
+uint32_t g_syncedFac[kSocketCount] = {}, g_syncedVar[kSocketCount] = {};
+
 bool g_have = false;                      // já tem a última versão combinada
 std::vector<net::LockerSlot> g_synced;    // armário combinado com o outro lado
 float g_syncedRes[kResources] = {};
@@ -136,9 +201,44 @@ void sendFull(const Locker& l, const float res[kResources]) {
     for (uint32_t i = 0; i < l.slots; ++i) all.push_back(slotOf(l, i));
     net::sendLocker(all);
     net::sendResources(res);
+    uint32_t fac[kSocketCount], var[kSocketCount];
+    readFacilities(fac, var);
+    net::sendFacilities(fac, var);
 }
 
+// Cancelar a construção pela vaga: cdecl (handle); devolve o custo (FUN_01571630).
+constexpr uintptr_t kCancelFacility = 0x01405DA0;
+
 }  // namespace
+
+void finishFacility(int i) {
+    if (i < 0 || i >= kSocketCount || !socketExists(i)) {
+        log::warn("base_sync: vaga %d invalida", i);
+        return;
+    }
+    const uintptr_t s = socketAt(i);
+    uint32_t fac = 0, var = 0, flags = 0;
+    readFacility(i, fac, var);
+    readAt(s + 0x04, flags);
+    if (!fac || !(flags & 1)) {
+        log::warn("base_sync: vaga %d sem construcao em andamento (fac %08x flags %x)", i, fac, flags);
+        return;
+    }
+    float before[kResources];
+    const bool haveBefore = readResources(before);
+    uint16_t id = 0;
+    readAt(s + 0x68, id);
+    const uint32_t handle = (3u << 27) | (static_cast<uint32_t>(i) << 15) | (id & 0x7fffu);
+    reinterpret_cast<void(__cdecl*)(uint32_t)>(kCancelFacility)(handle);
+    // var = 0: o SetFacility escolhe a 1ª variante que não é "em construção" (a pronta).
+    applyFacility(i, fac, 0);
+    if (haveBefore)
+        for (int k = 0; k < kResources; ++k) writeResource(k, before[k]);
+    uint32_t nf = 0, nv = 0;
+    readFacility(i, nf, nv);
+    readAt(s + 0x04, flags);
+    log::info("base_sync: vaga %d terminada na hora: %08x/%08x -> %08x/%08x flags %x", i, fac, var, nf, nv, flags);
+}
 
 void update(bool active, bool host) {
     const double now = clock::seconds();
@@ -158,6 +258,7 @@ void update(bool active, bool host) {
         g_synced.clear();
         for (uint32_t i = 0; i < l.slots; ++i) g_synced.push_back(slotOf(l, i));
         memcpy(g_syncedRes, res, sizeof(res));
+        readFacilities(g_syncedFac, g_syncedVar);
         g_have = true;
         log::info("base_sync: armario (%u vagas) e recursos %.0f/%.0f/%.0f/%.0f/%.0f", l.slots, res[0], res[1], res[2],
                   res[3], res[4]);
@@ -167,6 +268,10 @@ void update(bool active, bool host) {
         }
         net::takeLocker();  // pacotes de antes de ter o estado daqui não valem
         net::takeResources(res);
+        {
+            uint32_t f[kSocketCount], v[kSocketCount];
+            net::takeFacilities(f, v);
+        }
         readResources(res);
         return;
     }
@@ -202,6 +307,45 @@ void update(bool active, bool host) {
                       res[4]);
     }
 
+    // Instalações do outro lado: vaga sem mudança daqui ainda não enviada recebe a de lá.
+    {
+        uint32_t inFac[kSocketCount], inVar[kSocketCount], fac[kSocketCount], var[kSocketCount];
+        if (net::takeFacilities(inFac, inVar)) {
+            readFacilities(fac, var);
+            // Montar a instalação aqui não pode cobrar de novo: o custo já saiu do outro lado
+            // e chega pelos recursos. Em 2026-11-04 o client descontou o combustível outra vez.
+            float before[kResources];
+            const bool haveBefore = readResources(before);
+            bool appliedAny = false;
+            for (int i = 0; i < kSocketCount; ++i) {
+                if (!socketExists(i)) continue;
+                const bool pending = fac[i] != g_syncedFac[i] || var[i] != g_syncedVar[i];
+                if (pending || (fac[i] == inFac[i] && var[i] == inVar[i])) continue;
+                applyFacility(i, inFac[i], inVar[i]);
+                appliedAny = true;
+                readFacility(i, fac[i], var[i]);
+                // Fica o que o jogo aceitou (se recusou, não briga: só tenta de novo no próximo envio).
+                g_syncedFac[i] = fac[i];
+                g_syncedVar[i] = var[i];
+                if (g_logs++ < 40) {
+                    const char* name = "";
+                    readAt(socketAt(i) + kSock_Name, name);
+                    log::info("base_sync: vaga %d (%s) do outro jogador: %08x/%08x -> ficou %08x/%08x", i,
+                              engine::isReadable(name, 1) ? name : "?", inFac[i], inVar[i], fac[i], var[i]);
+                }
+            }
+            float after[kResources];
+            if (appliedAny && haveBefore && readResources(after))
+                for (int k = 0; k < kResources; ++k)
+                    if (after[k] != before[k]) {
+                        writeResource(k, before[k]);
+                        if (g_logs++ < 40)
+                            log::info("base_sync: recurso %d voltou de %.0f para %.0f (montar a instalacao cobrou)", k,
+                                      after[k], before[k]);
+                    }
+        }
+    }
+
     // 2) O que mudou daqui: manda (3 cópias; aplicar de novo não muda nada).
     std::vector<net::LockerSlot> changedSlots;
     for (uint32_t i = 0; i < l.slots; ++i) {
@@ -224,6 +368,22 @@ void update(bool active, bool host) {
         if (g_logs++ < 40)
             log::info("base_sync: recursos mudaram aqui: %.0f/%.0f/%.0f/%.0f/%.0f", res[0], res[1], res[2], res[3],
                       res[4]);
+    }
+
+    {
+        uint32_t fac[kSocketCount], var[kSocketCount];
+        readFacilities(fac, var);
+        bool changed = false;
+        for (int i = 0; i < kSocketCount; ++i)
+            if (fac[i] != g_syncedFac[i] || var[i] != g_syncedVar[i]) {
+                if (g_logs++ < 40) log::info("base_sync: vaga %d mudou aqui: %08x/%08x", i, fac[i], var[i]);
+                changed = true;
+            }
+        if (changed) {
+            memcpy(g_syncedFac, fac, sizeof(fac));
+            memcpy(g_syncedVar, var, sizeof(var));
+            for (int k = 0; k < 3; ++k) net::sendFacilities(fac, var);
+        }
     }
 
     // 3) Host: tudo a cada 5 s (o cliente acerta o que um pacote perdido deixou diferente).

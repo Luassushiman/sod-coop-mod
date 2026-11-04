@@ -211,6 +211,11 @@ void runCommandFile(DWORD now) {
     std::string result;
     if (puppet::readLuaText("SodCoop.cmdResult or ''", result) && !result.empty())
         log::info("cmd: resultado: %s", result.c_str());
+    // "FACILITY_FINISH:<vaga>": termina na hora a construção da vaga (teste).
+    if (result.compare(0, 16, "FACILITY_FINISH:") == 0) {
+        base_sync::finishFacility(atoi(result.c_str() + 16));
+        return;
+    }
     // "ACTOR:<entityId>": registra a vtable do IActor da entidade (engenharia reversa).
     if (result.compare(0, 6, "ACTOR:") == 0) {
         const engine::EntityId aid = static_cast<engine::EntityId>(strtoul(result.c_str() + 6, nullptr, 0));

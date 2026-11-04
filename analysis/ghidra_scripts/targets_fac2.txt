@@ -1,0 +1,3 @@
+NSHome::Facility::Build
+NSHome::Facility::SetFacility
+m_type == INVALID_FACILITY

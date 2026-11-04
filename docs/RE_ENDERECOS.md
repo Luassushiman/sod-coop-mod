@@ -229,6 +229,26 @@ Os lugares de vasculhar (armários, gavetas...) quase nunca são entidades (`UL_
 | Locais de base | entidades da classe `HomeSite` (`Properties.esHomeId`, `esHomeSize`, `bStarterHome`, `bHaven`); tomar: `NSHome::Home::ClaimHome` / aviso "Claim Home Site?" | VALIDADO-RUNTIME (lista) | 17 no Breakdown |
 | Estoque da base | "resource data" tipo 9 (`Stockpile.Ammo/Food/Materials/Medicine/Fuel`, símbolos `0x9000001...`); grupos em `*(0x01E1FBF4)`, valores em `+0xC` (0x14 bytes cada, valor em `+8`) codificados: troca de bits + XOR com `*(0x01E1FDAC) ^ *(0x01E1FB54)` (`0x01394740` lê, `0x013A3C30` grava); `0x01394D30` soma respeitando o limite `0x0190D7F0` | VALIDADO-RUNTIME (leitura) | 0 nas duas cópias sem base |
 
+## 4i. Instalações da base (Facility) — 2026-11-04
+
+| O quê | Endereço / layout | Status | Evidência |
+|---|---|---|---|
+| Vagas de instalação (sockets) | tabela em `0x01E545E8`, 32 entradas de `0xF0` | VALIDADO-RUNTIME | `FUN_01405fb0`/`FUN_01405770`; dump das duas cópias |
+| Campos da vaga | `+0x04` flags (`1` = em construção/ação, `2` = pronta), `+0x0C` tipo (índice na tabela de definições; `-1` = vazia), `+0x10` variante, `+0x50` nome da vaga (char*), `+0x68` id do handle (u16), `+0x6A` byte do handle | VALIDADO-RUNTIME | host construiu em `Outdoor2`: `+0x04` 0→1, `+0x0C` -1→1; no client, sem mudança |
+| Definições de instalação | `*(0x01E8F1D8)`, `0x20` cada, contagem `*(0x01E8F1CC)`; `+0x00` flags, `+0x04` hash do FacilityId, `+0x18` nº de variantes, `+0x1C` ponteiro das variantes (`0x28` cada: `+0x04` hash do VariantId, `+0x1C` flags com bit 1 = em construção, `+0x24` 1ª ação (s16), `+0x26` nº de ações) | CONFIRMADO-ESTÁTICO | `FUN_015711e0`, `FUN_015786c0` |
+| `NSHome::Facility::Build` | `0x015711E0` (thiscall vaga, tipo, ação): grava o tipo, escolhe a 1ª variante "em construção", dispara a ação (`FUN_0146ce90`, gasta recursos), liga a flag 1 | CONFIRMADO-ESTÁTICO | assert "m_type == INVALID_FACILITY" |
+| Construir pela vaga | `0x014065C0` (handle, tipo, ação) → `Build`; chamado pela UI em `0x01422496` | CONFIRMADO-ESTÁTICO | FindCallers |
+| `NSHome::Facility::SetFacility` | `0x015786C0` (thiscall vaga, byte, hash FacilityId, hash VariantId): monta a instalação pronta ou em construção sem gastar recursos (usado ao carregar o save, via `0x01406660`) | CONFIRMADO-ESTÁTICO | assert e chamadas de carga |
+
+| Demolir pela vaga | `0x01406520` (cdecl, handle) → `FUN_01571ec0` (fastcall vaga): tira o modelo, desfaz os bônus, vaga vazia | VALIDADO-RUNTIME | usado pela sincronização (2026-11-04) |
+| Cancelar a construção | `0x01405DA0` (cdecl, handle) → `FUN_01571630`: para a ação atual, devolve o custo e esvazia a vaga | VALIDADO-RUNTIME | comando de teste `FACILITY_FINISH` |
+| Handle da vaga | `3 << 27 \| índice << 15 \| (u16 em +0x68 & 0x7FFF)` | VALIDADO-RUNTIME | `FUN_01405770` |
+| Ordem das definições | a de `libs/class3/rts/facilities.xml`: 0 CommandCenter, 1 Workshop, 2 Bunkhouse, 3 Infirmary, 4 Training, 5 Kitchen, 6 Storage, 7 Bedroom, 8 Garden, 9 Library, 10 DiningArea, 11 Parking, 12 Outpost, 13 Watchtower… Variantes da Workshop: UnderConstruction, Basic, BasicB, Weapon, Car… | VALIDADO-RUNTIME | tipos das vagas da igreja batem com os nomes |
+| Cronômetro da construção | não fica na vaga (só tipo, variante e flags); vive no sistema de ações | — | dump da vaga em construção |
+| `rts_evolveSim` | **fecha o jogo** (assert → ExitProcess) no build de varejo; não usar | VALIDADO-RUNTIME | 2026-11-04 |
+
+Sincronização: ver `src/game/base_sync.cpp` e `docs/PROGRESSO.md` (Base — instalações). `SetFacility` cria o modelo no mundo (oficina vista nas duas telas), mas **cobra o custo** de novo em parte (o client descontou 5 de combustível); a sincronização devolve os recursos logo depois.
+
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"
 
 1. **Validação em runtime** de tudo acima (bloqueado pela Steam).

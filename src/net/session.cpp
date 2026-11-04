@@ -58,6 +58,9 @@ std::vector<LockerSlot> g_inLocker;    // protegido por g_lock
 std::vector<std::vector<float>> g_outResources;  // cada envio vai 3x; protegido por g_lock
 float g_inResources[kBaseResources] = {};
 bool g_haveInResources = false;        // protegido por g_lock
+std::vector<FacilitiesPacket> g_outFacilities;  // cada envio vai 3x; protegido por g_lock
+FacilitiesPacket g_inFacilities = {};
+bool g_haveInFacilities = false;       // protegido por g_lock
 std::vector<ZombieLook> g_outZombieLooks;           // host; protegido por g_lock
 std::map<uint32_t, ZombieLook> g_zombieLooks;       // cliente: id -> aparência; protegido por g_lock
 constexpr size_t kMaxZombieLooks = 512;
@@ -346,7 +349,13 @@ void sendBasePackets() {
     locker.swap(g_outLocker);
     std::vector<std::vector<float>> res;
     res.swap(g_outResources);
+    std::vector<FacilitiesPacket> fac;
+    fac.swap(g_outFacilities);
     ReleaseSRWLockExclusive(&g_lock);
+    for (FacilitiesPacket& p : fac) {
+        fillHeader(p.h, PacketType::Facilities);
+        send(&p, sizeof(p));
+    }
     for (size_t i = 0; i < locker.size();) {
         LockerPacket p = {};
         fillHeader(p.h, PacketType::Locker);
@@ -379,6 +388,13 @@ void handleLocker(const char* data, int size) {
         memcpy(s.data, p.e[i].data, sizeof(s.data));
         g_inLocker.push_back(s);
     }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+void handleFacilities(const char* data) {
+    AcquireSRWLockExclusive(&g_lock);
+    memcpy(&g_inFacilities, data, sizeof(g_inFacilities));
+    g_haveInFacilities = true;
     ReleaseSRWLockExclusive(&g_lock);
 }
 
@@ -432,6 +448,7 @@ void setConnected(bool connected, uint32_t peerId) {
         g_zombieLooks.clear();
         g_inLocker.clear();
         g_haveInResources = false;
+        g_haveInFacilities = false;
         g_haveHitSeq = false;  // o outro lado recomeça a sequência ao reabrir
         g_remoteLook.clear();
         g_remoteLookSeq = 0;
@@ -525,6 +542,10 @@ void handlePacket(const char* data, int size, const Address& from) {
     }
     if (h.type == PacketType::Locker && size > (int)offsetof(LockerPacket, e)) {
         handleLocker(data, size);
+        return;
+    }
+    if (h.type == PacketType::Facilities && size >= (int)sizeof(FacilitiesPacket)) {
+        handleFacilities(data);
         return;
     }
     if (h.type == PacketType::Resources && size >= (int)sizeof(ResourcesPacket)) {
@@ -803,6 +824,27 @@ void sendResources(const float values[5]) {
     AcquireSRWLockExclusive(&g_lock);
     if (g_outResources.size() < 16) g_outResources.emplace_back(values, values + kBaseResources);
     ReleaseSRWLockExclusive(&g_lock);
+}
+
+void sendFacilities(const uint32_t facility[32], const uint32_t variant[32]) {
+    FacilitiesPacket p = {};
+    memcpy(p.facility, facility, sizeof(p.facility));
+    memcpy(p.variant, variant, sizeof(p.variant));
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_outFacilities.size() < 16) g_outFacilities.push_back(p);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+bool takeFacilities(uint32_t facility[32], uint32_t variant[32]) {
+    AcquireSRWLockExclusive(&g_lock);
+    const bool have = g_haveInFacilities;
+    if (have) {
+        memcpy(facility, g_inFacilities.facility, sizeof(g_inFacilities.facility));
+        memcpy(variant, g_inFacilities.variant, sizeof(g_inFacilities.variant));
+    }
+    g_haveInFacilities = false;
+    ReleaseSRWLockExclusive(&g_lock);
+    return have;
 }
 
 bool takeResources(float values[5]) {

@@ -1,6 +1,6 @@
-# Protocolo de rede (v24)
+# Protocolo de rede (v25)
 
-Histórico: v1 = posição/yaw; v2 = `State.speed` (escolha de animação); v3 = `State.timeMs` vira relógio de alta precisão (`QueryPerformanceCounter`, ms), base da interpolação; v4 = `State.action`/`actionSeq` (ataques, pulos e outras ações); v5 = `State.weapon` (modelo da arma na mão); v6 = `base`/`upper`/`upperSeq`; v7 = `aiming`/`aimOffset`; v8 = `aimPose`; v9 = pacote `Zombies`; v10 = `ZombieEntry.model`; v11 = pacote `Hit`; v12 = `Hit` também host → cliente (ataque de zumbi); v13 = `State.dead`; v14 = ids de zumbi passam a ser o `EntityId` (u32); v15 = `State.timeOfDay`; v16 = pacote `Look`; v17 = `Look` com materiais (1200 bytes); v18 = `State.vehicle`/`vehiclePos`/`vehicleAngles`; v19 = `State.vehicleId`; v20 = `State.vehicleName`/`passengerOf`/`passengerSeat`; v21 = pacotes `Searched` e `Container`; v22 = pacote `Give`; v23 = `ZombieEntry.lookHash` e pacote `ZombieLook`; v24 = pacotes `Locker` e `Resources`. Versões diferentes são recusadas (`Reject(2)`).
+Histórico: v1 = posição/yaw; v2 = `State.speed` (escolha de animação); v3 = `State.timeMs` vira relógio de alta precisão (`QueryPerformanceCounter`, ms), base da interpolação; v4 = `State.action`/`actionSeq` (ataques, pulos e outras ações); v5 = `State.weapon` (modelo da arma na mão); v6 = `base`/`upper`/`upperSeq`; v7 = `aiming`/`aimOffset`; v8 = `aimPose`; v9 = pacote `Zombies`; v10 = `ZombieEntry.model`; v11 = pacote `Hit`; v12 = `Hit` também host → cliente (ataque de zumbi); v13 = `State.dead`; v14 = ids de zumbi passam a ser o `EntityId` (u32); v15 = `State.timeOfDay`; v16 = pacote `Look`; v17 = `Look` com materiais (1200 bytes); v18 = `State.vehicle`/`vehiclePos`/`vehicleAngles`; v19 = `State.vehicleId`; v20 = `State.vehicleName`/`passengerOf`/`passengerSeat`; v21 = pacotes `Searched` e `Container`; v22 = pacote `Give`; v23 = `ZombieEntry.lookHash` e pacote `ZombieLook`; v24 = pacotes `Locker` e `Resources`; v25 = pacote `Facilities`. Versões diferentes são recusadas (`Reject(2)`).
 
 Código: `src/net/protocol.h` (formato), `src/net/session.cpp` (lógica) e `src/net/udp_socket.cpp` (transporte).
 
@@ -18,7 +18,7 @@ Todo pacote começa com `Header` (16 bytes, little-endian, `#pragma pack(1)`):
 |---|---|---|
 | `magic` | u32 | `0x43444F53` ("SODC"); pacotes com outro valor são ignorados |
 | `version` | u16 | `kProtocolVersion` = 22; se for diferente, o host responde `Reject(2)` |
-| `type` | u8 | 1 Hello, 2 Welcome, 3 Reject, 4 State, 5 Bye, 6 Zombies, 7 Hit, 8 Look, 9 Searched, 10 Container, 11 Give, 12 ZombieLook, 13 Locker, 14 Resources |
+| `type` | u8 | 1 Hello, 2 Welcome, 3 Reject, 4 State, 5 Bye, 6 Zombies, 7 Hit, 8 Look, 9 Searched, 10 Container, 11 Give, 12 ZombieLook, 13 Locker, 14 Resources, 15 Facilities |
 | `reserved` | u8 | 0 |
 | `senderId` | u32 | token aleatório da instância (identificação do jogador) |
 | `seq` | u32 | sequência crescente por remetente; `State` com `seq` ≤ último aceito é descartado |
@@ -36,6 +36,7 @@ Todo pacote começa com `Header` (16 bytes, little-endian, `#pragma pack(1)`):
 | ZombieLook | `u32 zombieId, u32 lookHash, char parts[até 1200]` (como `Look`: `base=esqueleto.chr;anexo=arquivo.chr|material;...`; vai só até o 0 final) | host → cliente, ao aparecer o zumbi e a cada 3 s (até 4 por rodada) |
 | Locker | `u8 count, LockerEntry e[count]` (até 100; `LockerEntry` = `u16 slot, u32 id, u8 data[6]`; id 0 = vaga vazia) | ambos: vagas do armário da base que mudaram (3 cópias); host: todas a cada 5 s |
 | Resources | `f32 values[5]` (os 5 recursos do estoque, na ordem do jogo) | ambos: ao mudar (3 cópias); host a cada 5 s |
+| Facilities | `u32 facility[32]`, `u32 variant[32]` (hash do FacilityId e do VariantId de cada vaga da base; 0 = vazia) | ambos: ao mudar (3 cópias); host a cada 5 s |
 | Give | `u16 giveSeq, u32 itemId, u8 data[6], u8 returned` (item dado ao outro jogador; data = dados da vaga) | ambos, 3 cópias; quem recebe descarta `giveSeq` repetido; se não couber, devolve com `returned = 1` |
 | Look | `u16 lookSeq, char parts[1200]` = `base=<esqueleto>;<anexo>=<arquivo.chr>|<material>;...` (partes de pele do slot 0) | ambos, a cada 2 s; quem recebe recria o fantoche quando a aparência muda |
 | Hit | `u16 hitSeq, u32 zombieId, u8 kind, f32 damage`. kind 0 = corpo a corpo, 1 = tiro (cliente → host: o cliente acertou o zumbi `zombieId`); 2 = ataque de zumbi (host → cliente: o zumbi `zombieId` acertou o jogador do cliente) | ambos, 3 cópias por golpe; quem recebe descarta `hitSeq` repetido (a sequência recomeça ao reconectar) |

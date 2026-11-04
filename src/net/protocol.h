@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 24;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook; v24: pacotes Locker e Resources
+inline constexpr uint16_t kProtocolVersion = 25;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook; v24: pacotes Locker e Resources; v25: pacote Facilities
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -27,6 +27,7 @@ enum class PacketType : uint8_t {
     ZombieLook = 12, // host -> cliente: partes de um zumbi (ao aparecer e a cada 3 s)
     Locker = 13,  // ambos: vagas do armário da base que mudaram (3x); host: todas a cada 5 s
     Resources = 14, // ambos: os 5 recursos do estoque da base (ao mudar, 3x; host a cada 5 s)
+    Facilities = 15, // ambos: instalações das 32 vagas da base (ao mudar, 3x; host a cada 5 s)
 };
 
 #pragma pack(push, 1)
@@ -152,6 +153,12 @@ inline constexpr int kBaseResources = 5;
 struct ResourcesPacket {
     Header h;
     float values[kBaseResources];  // na ordem do jogo (resource data tipo 9, entradas 0 a 4)
+};
+inline constexpr int kBaseSockets = 32;
+struct FacilitiesPacket {
+    Header h;
+    uint32_t facility[kBaseSockets];  // hash do FacilityId de cada vaga (0 = vazia)
+    uint32_t variant[kBaseSockets];   // hash do VariantId (em construção, pronta, melhorias)
 };
 struct ZombieLookPacket {
     Header h;

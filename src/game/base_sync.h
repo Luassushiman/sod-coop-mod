@@ -9,4 +9,8 @@ namespace sodcoop::base_sync {
 // active: no mundo e conectado. host: o host é quem manda o estado completo.
 void update(bool active, bool host);
 
+// Teste: termina na hora a construção da vaga (cancela a ação, devolve os recursos como
+// estavam e monta a variante pronta). A outra cópia recebe pela sincronização.
+void finishFacility(int socket);
+
 }  // namespace sodcoop::base_sync

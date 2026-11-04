@@ -1,0 +1,6 @@
+HomeMenuFacilityActionSelected
+HomeMenuSocketSelected
+HomeMenuActionFacilitySelected
+Facility: %s
+UI: invalid socket '%s'
+HMSetMapSocket
