@@ -225,6 +225,14 @@ void runCommandFile(DWORD now) {
         base_sync::finishFacility(atoi(result.c_str() + 16));
         return;
     }
+    // "FACILITY_SET:<vaga>:<variante>": troca a variante da instalação da vaga (teste de melhoria).
+    if (result.compare(0, 13, "FACILITY_SET:") == 0) {
+        const char* p = result.c_str() + 13;
+        const int socket = atoi(p);
+        const char* colon = strchr(p, ':');
+        base_sync::finishFacility(socket, colon ? atoi(colon + 1) : -1);
+        return;
+    }
     // "ACTOR:<entityId>": registra a vtable do IActor da entidade (engenharia reversa).
     if (result.compare(0, 6, "ACTOR:") == 0) {
         const engine::EntityId aid = static_cast<engine::EntityId>(strtoul(result.c_str() + 6, nullptr, 0));

@@ -11,6 +11,8 @@ void update(bool active, bool host);
 
 // Teste: termina na hora a construção da vaga (cancela a ação, devolve os recursos como
 // estavam e monta a variante pronta). A outra cópia recebe pela sincronização.
-void finishFacility(int socket);
+// variant >= 0: monta essa variante (índice na definição) em vez da pronta padrão, e vale
+// também sem ação em andamento (teste de melhoria).
+void finishFacility(int socket, int variant = -1);
 
 }  // namespace sodcoop::base_sync

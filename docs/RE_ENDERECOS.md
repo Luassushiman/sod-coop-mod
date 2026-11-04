@@ -245,6 +245,7 @@ Os lugares de vasculhar (armários, gavetas...) quase nunca são entidades (`UL_
 | Handle da vaga | `3 << 27 \| índice << 15 \| (u16 em +0x68 & 0x7FFF)` | VALIDADO-RUNTIME | `FUN_01405770` |
 | Ordem das definições | a de `libs/class3/rts/facilities.xml`: 0 CommandCenter, 1 Workshop, 2 Bunkhouse, 3 Infirmary, 4 Training, 5 Kitchen, 6 Storage, 7 Bedroom, 8 Garden, 9 Library, 10 DiningArea, 11 Parking, 12 Outpost, 13 Watchtower… Variantes da Workshop: UnderConstruction, Basic, BasicB, Weapon, Car… | VALIDADO-RUNTIME | tipos das vagas da igreja batem com os nomes |
 | Cronômetro da construção | não fica na vaga (só tipo, variante e flags); vive no sistema de ações | — | dump da vaga em construção |
+| Comandos de teste do mod | resultado do `sodcoop_cmd.lua`: `FACILITY_FINISH:<vaga>` (termina a construção), `FACILITY_SET:<vaga>:<índice da variante>` (troca a variante; teste de melhoria) | — | `src/main.cpp`, `base_sync::finishFacility` |
 | `rts_evolveSim` | **fecha o jogo** (assert → ExitProcess) no build de varejo; não usar | VALIDADO-RUNTIME | 2026-11-04 |
 
 Sincronização: ver `src/game/base_sync.cpp` e `docs/PROGRESSO.md` (Base — instalações). `SetFacility` cria o modelo no mundo (oficina vista nas duas telas), mas **cobra o custo** de novo em parte (o client descontou 5 de combustível); a sincronização devolve os recursos logo depois.

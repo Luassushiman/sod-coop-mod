@@ -211,7 +211,7 @@ constexpr uintptr_t kCancelFacility = 0x01405DA0;
 
 }  // namespace
 
-void finishFacility(int i) {
+void finishFacility(int i, int variantIndex) {
     if (i < 0 || i >= kSocketCount || !socketExists(i)) {
         log::warn("base_sync: vaga %d invalida", i);
         return;
@@ -220,7 +220,7 @@ void finishFacility(int i) {
     uint32_t fac = 0, var = 0, flags = 0;
     readFacility(i, fac, var);
     readAt(s + 0x04, flags);
-    if (!fac || !(flags & 1)) {
+    if (!fac || (variantIndex < 0 && !(flags & 1))) {
         log::warn("base_sync: vaga %d sem construcao em andamento (fac %08x flags %x)", i, fac, flags);
         return;
     }
@@ -229,9 +229,25 @@ void finishFacility(int i) {
     uint16_t id = 0;
     readAt(s + 0x68, id);
     const uint32_t handle = (3u << 27) | (static_cast<uint32_t>(i) << 15) | (id & 0x7fffu);
-    reinterpret_cast<void(__cdecl*)(uint32_t)>(kCancelFacility)(handle);
+    if (flags & 1) reinterpret_cast<void(__cdecl*)(uint32_t)>(kCancelFacility)(handle);
     // var = 0: o SetFacility escolhe a 1ª variante que não é "em construção" (a pronta).
-    applyFacility(i, fac, 0);
+    uint32_t want = 0;
+    if (variantIndex >= 0) {
+        int32_t type = -1;
+        uintptr_t defs = 0, variants = 0;
+        uint32_t nvar = 0;
+        // A vaga pode ter sido esvaziada pelo cancelamento: o tipo vem do hash lido antes.
+        uint32_t count = 0;
+        if (readAt(kFacilityDefs, defs) && defs && readAt(kFacilityDefCount, count))
+            for (uint32_t t = 0; t < count; ++t) {
+                uint32_t h = 0;
+                if (readAt(defs + t * kDefStride + kDef_Hash, h) && h == fac) type = static_cast<int32_t>(t);
+            }
+        if (type >= 0 && readAt(defs + type * kDefStride + kDef_VariantCount, nvar) &&
+            static_cast<uint32_t>(variantIndex) < nvar && readAt(defs + type * kDefStride + kDef_Variants, variants))
+            readAt(variants + variantIndex * kVariantStride + kVar_Hash, want);
+    }
+    applyFacility(i, fac, want);
     if (haveBefore)
         for (int k = 0; k < kResources; ++k) writeResource(k, before[k]);
     uint32_t nf = 0, nv = 0;
