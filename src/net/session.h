@@ -24,6 +24,9 @@ struct SessionConfig {
     int sendRateHz = 20;
     int timeoutMs = 5000;
     std::string playerName = "player";
+    // [net] transport: "udp" (IP e porta) ou "steam" (P2P da Steam, sem abrir porta).
+    bool steam = false;
+    uint64_t steamPeer = 0;  // [net] steam_peer: SteamID64 do outro jogador
 };
 
 struct PlayerState {

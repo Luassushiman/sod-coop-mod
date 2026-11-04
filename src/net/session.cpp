@@ -10,6 +10,7 @@
 
 #include "core/clock.h"
 #include "core/log.h"
+#include "net/steam_p2p.h"
 #include "net/protocol.h"
 #include "net/udp_socket.h"
 
@@ -25,6 +26,11 @@ namespace {
 
 SessionConfig g_cfg;
 UdpSocket g_socket;
+SteamP2P g_steam;  // transport=steam
+
+// Envio e recebimento pelo transporte escolhido.
+bool trSendTo(const Address& to, const void* data, int size);
+int trReceive(void* buf, int cap, Address& from);
 SRWLOCK g_lock = SRWLOCK_INIT;
 PlayerState g_local;       // protegido por g_lock
 RemoteState g_remote;      // protegido por g_lock
@@ -86,7 +92,7 @@ void fillHeader(Header& h, PacketType t) {
 }
 
 void send(const void* pkt, int size) {
-    if (g_peerAddr.valid()) g_socket.sendTo(g_peerAddr, pkt, size);
+    if (g_peerAddr.valid()) trSendTo(g_peerAddr, pkt, size);
 }
 
 void sendHello() {
@@ -480,7 +486,7 @@ void handlePacket(const char* data, int size, const Address& from) {
             RejectPacket r = {};
             fillHeader(r.h, PacketType::Reject);
             r.reason = 2;
-            g_socket.sendTo(from, &r, sizeof(r));
+            trSendTo(from, &r, sizeof(r));
         }
         return;
     }
@@ -490,7 +496,7 @@ void handlePacket(const char* data, int size, const Address& from) {
             RejectPacket r = {};
             fillHeader(r.h, PacketType::Reject);
             r.reason = 1;
-            g_socket.sendTo(from, &r, sizeof(r));
+            trSendTo(from, &r, sizeof(r));
             log::warn("net: Hello de %s recusado (sessao cheia)", from.toString().c_str());
             return;
         }
@@ -615,6 +621,14 @@ void handlePacket(const char* data, int size, const Address& from) {
     }
 }
 
+bool trSendTo(const Address& to, const void* data, int size) {
+    return g_cfg.steam ? g_steam.sendTo(to, data, size) : g_socket.sendTo(to, data, size);
+}
+
+int trReceive(void* buf, int cap, Address& from) {
+    return g_cfg.steam ? g_steam.receive(buf, cap, from) : g_socket.receive(buf, cap, from);
+}
+
 DWORD WINAPI netThread(LPVOID) {
     // Envio agendado no relógio preciso (próximo envio = anterior + intervalo):
     // com "agora - último >= intervalo" e Sleep de ~15,6 ms a taxa real caía para ~16 Hz.
@@ -626,7 +640,7 @@ DWORD WINAPI netThread(LPVOID) {
     while (g_running) {
         Address from;
         int n;
-        while ((n = g_socket.receive(buf, sizeof(buf), from)) > 0) {
+        while ((n = trReceive(buf, sizeof(buf), from)) > 0) {
             ++received;
             handlePacket(buf, n, from);
         }
@@ -689,7 +703,17 @@ bool start(const SessionConfig& cfg) {
     QueryPerformanceCounter(&t);
     g_myId = (uint32_t)(t.QuadPart ^ (GetCurrentProcessId() << 16)) | 1;
 
-    if (cfg.role == Role::Host) {
+    if (cfg.steam) {
+        // P2P da Steam: os dois lados apontam para o SteamID do outro; o cliente manda Hello
+        // para o par, o host responde como no UDP.
+        const uint64_t me = SteamP2P::localSteamId();
+        log::info("net: transporte Steam; seu SteamID64 = %llu (passe para o amigo); amigo = %llu",
+                  static_cast<unsigned long long>(me), static_cast<unsigned long long>(cfg.steamPeer));
+        if (!g_steam.open(cfg.steamPeer)) return false;
+        if (cfg.role == Role::Client) g_peerAddr = SteamP2P::kPeerAddress;
+        log::info("net: %s (id %08X) pela Steam", cfg.role == Role::Host ? "host esperando o amigo" : "cliente",
+                  g_myId);
+    } else if (cfg.role == Role::Host) {
         if (!g_socket.open(cfg.bindHost, cfg.port)) return false;
         log::info("net: host escutando em %s:%u (id %08X)", cfg.bindHost.c_str(), cfg.port, g_myId);
     } else {
@@ -715,6 +739,7 @@ void stop() {
         g_thread = nullptr;
     }
     g_socket.close();
+    g_steam.close();
     timeEndPeriod(1);
 }
 

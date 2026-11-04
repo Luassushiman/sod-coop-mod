@@ -384,9 +384,10 @@ Pendências:
 ## Versão para jogar (2026-11-04, em andamento)
 
 - **Padrões da DLL de versão:** `lua_command_file`, `anim_watch` (log de animações) e `max_fps` passam a vir desligados (0) quando o `sodcoop.ini` não diz nada. Os `sodcoop.ini` das cópias de teste ligam os três explicitamente. As outras opções de teste (`start_pos`, `player_invisible`, `god_mode`, `keep_running_unfocused`, `[window]`) já vinham desligadas por padrão.
-- **Pacote:** `package.ps1` compila e gera `buildelease\sodcoop-<data>.zip` com a `dinput8.dll`, um `sodcoop.ini` modelo (`release/sodcoop.ini`: `role`, `bind`, `host`, `port`) e `LEIA-ME.md` (instalação, copiar o save do host para o client, como jogar, internet por porta UDP ou rede virtual, o que funciona e as limitações). Não toca em nenhuma instalação do jogo.
+- **Pacote:** `package.ps1` compila e gera `build
+elease\sodcoop-<data>.zip` com a `dinput8.dll`, um `sodcoop.ini` modelo (`release/sodcoop.ini`: `role`, `bind`, `host`, `port`) e `LEIA-ME.md` (instalação, copiar o save do host para o client, como jogar, internet por porta UDP ou rede virtual, o que funciona e as limitações). Não toca em nenhuma instalação do jogo.
 - **Não testado:** o pacote com o `sodcoop.ini` modelo (sem as opções de teste) em duas máquinas.
-- **Falta:** conexão pela internet sem abrir porta (rede da Steam).
+- **Conexão pela Steam ✅ (teste parcial):** `[net] transport=steam` e `steam_peer=<SteamID64 do outro>`. `src/net/steam_p2p.cpp` usa a `ISteamNetworking005` da própria `steam_api.dll` do jogo, pelas funções exportadas `SteamNetworking`/`SteamUser` (a DLL é antiga, sem a API "plana"), com chamadas pela vtable: `SendP2PPacket` (0; não confiável até 1200 bytes, confiável acima), `IsP2PPacketAvailable` (1), `ReadP2PPacket` (2), `AcceptP2PSessionWithUser` (3, chamada a cada 2 s em vez do callback `P2PSessionRequest_t`) e `AllowP2PPacketRelay(true)` (7). `ISteamUser017::GetSteamID` (2) dá o SteamID64 de quem joga, mostrado no log para trocar com o amigo. O par vira o endereço fixo `1.0.0.0:1` na sessão, e o resto do protocolo é o mesmo do UDP. Teste com as duas cópias na **mesma conta** (as duas apontando para o próprio SteamID): conectaram, e o client apareceu e se mexeu no host. Com a mesma conta, a Steam entrega cada pacote a uma das duas cópias (o client recebeu uns 150 de 320 pacotes a cada 10 s), então o teste definitivo precisa de duas contas. As cópias de teste voltaram para UDP. O `sodcoop.ini` modelo vem com `transport=steam`.
 
 ## Estabilidade (2026-11-04)
 

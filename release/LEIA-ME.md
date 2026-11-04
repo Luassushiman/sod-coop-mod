@@ -16,8 +16,9 @@ Co-op para **duas pessoas** no modo **Breakdown** do State of Decay: Year-One Su
 1. Abra a pasta do jogo, a do `StateOfDecay.exe`. Em geral é `C:\Program Files (x86)\Steam\steamapps\common\State of Decay YOSE`.
 2. Copie a `dinput8.dll` e o `sodcoop.ini` para lá.
 3. Edite o `sodcoop.ini`:
-   - **Host** (quem cria a partida): `role=host` e `bind=0.0.0.0`.
-   - **Client** (quem entra): `role=client` e, em `host=`, o IP do host.
+   - **Host**, quem cria a partida, usa `role=host`. **Client**, quem entra, usa `role=client`.
+   - **Pela Steam**, o recomendado: deixe `transport=steam` e, em `steam_peer=`, ponha o **SteamID64 do outro jogador**. É um número de 17 dígitos, que começa com 7656119. Para descobrir o seu, abra o jogo uma vez com o mod e procure no log a linha `seu SteamID64 = ...`, ou cole o link do seu perfil em um site como steamid.io.
+   - **Por IP**: use `transport=udp`. O host usa `bind=0.0.0.0`, e o client põe o IP do host em `host=`.
 
 Para remover, apague a `dinput8.dll` e o `sodcoop.ini`. O jogo volta ao normal, e nenhum arquivo original é alterado.
 
@@ -33,11 +34,13 @@ O client precisa carregar **o mesmo save do host**:
 
 1. O **host** abre o jogo e entra no Breakdown, em **Continuar**.
 2. Depois que o host estiver no mundo, o **client** abre o jogo e entra em **Continuar**. Ele aparece ao lado do host.
-3. A conexão é automática. No log do mod (`sodcoop_host.log` ou `sodcoop_client.log`, na pasta do jogo), aparece `conectado=1`.
+3. A conexão é automática. No log do mod (`sodcoop_default.log`, na pasta do jogo), aparece `conectado=1`.
 
 ### Pela internet
 
-Hoje a conexão é direta, por UDP:
+Com `transport=steam`, **não precisa abrir porta**: a Steam conecta os dois PCs. Basta os dois estarem logados na Steam e cada um ter o SteamID64 do outro no `sodcoop.ini`.
+
+Com `transport=udp`, a conexão é direta:
 
 - O **host** libera a porta **UDP 27650** no roteador (encaminhamento de porta) e passa o **IP público** dele para o client.
 - Outra opção é usar um programa de rede virtual, como Radmin VPN, ZeroTier ou Tailscale. Aí o client usa o IP que o programa mostra para o host.

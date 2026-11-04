@@ -82,6 +82,8 @@ Config loadConfig() {
     c.net.sendRateHz = GetPrivateProfileIntW(L"net", L"send_rate_hz", c.net.sendRateHz, ini.c_str());
     c.net.timeoutMs = GetPrivateProfileIntW(L"net", L"timeout_ms", c.net.timeoutMs, ini.c_str());
     c.net.playerName = c.instanceName;
+    c.net.steam = readString(ini, L"net", L"transport", "udp") == "steam";
+    c.net.steamPeer = strtoull(readString(ini, L"net", L"steam_peer", "0").c_str(), nullptr, 10);
 
     c.anim.idle = readString(ini, L"anim", L"idle", c.anim.idle);
     c.anim.walk = readString(ini, L"anim", L"walk", c.anim.walk);
