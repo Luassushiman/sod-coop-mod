@@ -42,8 +42,8 @@ Config loadConfig() {
         GetPrivateProfileIntW(L"debug", L"position_log_interval_ms", 1000, ini.c_str());
     if (c.positionLogIntervalMs < 50) c.positionLogIntervalMs = 50;
     c.keepRunningUnfocused = GetPrivateProfileIntW(L"debug", L"keep_running_unfocused", 0, ini.c_str()) != 0;
-    c.maxFps = GetPrivateProfileIntW(L"debug", L"max_fps", 60, ini.c_str());
-    c.luaCommandFile = GetPrivateProfileIntW(L"debug", L"lua_command_file", 1, ini.c_str()) != 0;
+    c.maxFps = GetPrivateProfileIntW(L"debug", L"max_fps", 0, ini.c_str());
+    c.luaCommandFile = GetPrivateProfileIntW(L"debug", L"lua_command_file", 0, ini.c_str()) != 0;
     {
         const std::string sp = readString(ini, L"debug", L"start_pos", "");
         c.startPosValid = !sp.empty() &&
@@ -51,7 +51,7 @@ Config loadConfig() {
     }
     c.playerInvisible = GetPrivateProfileIntW(L"debug", L"player_invisible", 0, ini.c_str()) != 0;
     c.godMode = GetPrivateProfileIntW(L"debug", L"god_mode", 0, ini.c_str()) != 0;
-    c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 1, ini.c_str()) != 0;
+    c.animWatch = GetPrivateProfileIntW(L"debug", L"anim_watch", 0, ini.c_str()) != 0;
     c.puppetModel = readString(ini, L"puppet", L"model", c.puppetModel);
     c.zombies.enabled = GetPrivateProfileIntW(L"zombies", L"enabled", 1, ini.c_str()) != 0;
     c.zombies.radius = static_cast<float>(GetPrivateProfileIntW(L"zombies", L"radius", 80, ini.c_str()));

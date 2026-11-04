@@ -381,6 +381,13 @@ Pendências:
 - O client não mira mais em zumbis mortos (golpes iam para corpos).
 - **Pendência:** o golpe do client ainda parece "seco": o fantoche não tem física, então a arma o atravessa e o jogo não toca o impacto dele (parada da arma, sangue, som). Os nomes dos efeitos ficam nos `.pak` (protegidos). Próximo passo: testar dar um corpo físico ao fantoche para a arma bater nele.
 
+## Versão para jogar (2026-11-04, em andamento)
+
+- **Padrões da DLL de versão:** `lua_command_file`, `anim_watch` (log de animações) e `max_fps` passam a vir desligados (0) quando o `sodcoop.ini` não diz nada. Os `sodcoop.ini` das cópias de teste ligam os três explicitamente. As outras opções de teste (`start_pos`, `player_invisible`, `god_mode`, `keep_running_unfocused`, `[window]`) já vinham desligadas por padrão.
+- **Pacote:** `package.ps1` compila e gera `buildelease\sodcoop-<data>.zip` com a `dinput8.dll`, um `sodcoop.ini` modelo (`release/sodcoop.ini`: `role`, `bind`, `host`, `port`) e `LEIA-ME.md` (instalação, copiar o save do host para o client, como jogar, internet por porta UDP ou rede virtual, o que funciona e as limitações). Não toca em nenhuma instalação do jogo.
+- **Não testado:** o pacote com o `sodcoop.ini` modelo (sem as opções de teste) em duas máquinas.
+- **Falta:** conexão pela internet sem abrir porta (rede da Steam).
+
 ## Estabilidade (2026-11-04)
 
 - **Evidência das quedas:** o `crash_log` agora registra a corrupção de heap (`0xC0000374`, na 1ª chance; antes o jogo fechava sem nada no log) e grava um minidump (`sodcoop_<data>_<hora>_<código>.dmp`, ao lado do exe, com as pilhas das threads e a memória apontada por elas) nela e em qualquer fechamento por exceção, no máximo 2 por execução.

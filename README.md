@@ -79,6 +79,7 @@ a0c80cfc-ec1f-4183-9b24-1c29d5a50471
 | `build.ps1` | Compila `build\dinput8.dll` |
 | `mods/resolution_1440p/` | Mod à parte que põe 2560×1440 no menu de opções (sem o co-op) |
 | `install.ps1` | Instala/remove o mod nas cópias de teste |
+| `package.ps1` / `release/` | Gera o pacote para jogar (`build\release\sodcoop-<data>.zip`: DLL, `sodcoop.ini` modelo e LEIA-ME) |
 | `launch.ps1` / `tile_windows.ps1` | Abre as duas cópias do jogo lado a lado |
 | `analysis/` | Scripts de engenharia reversa (Ghidra) |
 | `tools/analysis/` | Scripts de análise dos arquivos do jogo |

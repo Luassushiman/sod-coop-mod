@@ -42,9 +42,9 @@ struct Config {
     std::string instanceName = "default";  // [general] instance=host|client — log e nome do jogador
     int positionLogIntervalMs = 1000;      // [debug] position_log_interval_ms
     bool keepRunningUnfocused = false;     // [debug] keep_running_unfocused: não pausa/desacelera sem foco
-    int maxFps = 60;                       // [debug] max_fps: limite de FPS (sys_MaxFPS); 0 = não mexe
-    bool luaCommandFile = true;            // [debug] lua_command_file: executa sodcoop_cmd.lua (teste)
-    bool animWatch = true;                 // [debug] anim_watch: registra as animações do jogador local
+    int maxFps = 0;                        // [debug] max_fps: limite de FPS (sys_MaxFPS); 0 = não mexe (padrão)
+    bool luaCommandFile = false;           // [debug] lua_command_file: executa sodcoop_cmd.lua (só teste)
+    bool animWatch = false;                // [debug] anim_watch: registra no log as animações do jogador local
     // [debug] start_pos=x,y,z (teste): ao entrar no mundo, o jogador local vai para esse ponto
     // (ex.: a base do host). Vazio = não mexe.
     bool startPosValid = false;
