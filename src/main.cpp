@@ -658,6 +658,7 @@ void onFrame() {
             zombies::clientRise({remote.state.pos[0], remote.state.pos[1], remote.state.pos[2]});
         detectLocalAttacks(settled, s, mine);
         zombies::updateGrenades(g_cfg.zombies, settled);
+        zombies::updateFirePools(g_cfg.zombies, settled);
     }
 }
 

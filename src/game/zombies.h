@@ -59,5 +59,7 @@ void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self,
 // Cliente: granadas do jogador local (ULGrenade_*). Quando uma some (explodiu), os zumbis do
 // host perto do ponto recebem dano. A cada 0,1 s.
 void updateGrenades(const Config& cfg, bool settled);
+// Cliente: zumbis em cima das poças de fogo da Molotov (ULMolotovPool) levam dano a cada 0,5 s.
+void updateFirePools(const Config& cfg, bool settled);
 
 }  // namespace sodcoop::zombies

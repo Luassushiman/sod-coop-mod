@@ -73,11 +73,30 @@ function SodCoop.ListZombies(x1, y1, z1, x2, y2, z2, r)
   return table.concat(out, " ")
 end
 -- Entidade de zumbi pelo EntityId (nil se já não existe).
+-- O jogo reaproveita o EntityId de um zumbi descarregado numa entidade nova: a tabela guardada
+-- fica com o ator antigo (liberado), e SetHealth nele fechou o host (assert, 2026-11-04).
+-- Por isso vale sempre a entidade atual desse id, e só se ainda for um zumbi.
 function SodCoop.ZEntity(id)
   local z = SodCoop.zById[id]
-  if z and System.GetEntity(z.id) then return z end
+  local cur = z and System.GetEntity(z.id)
+  if cur and string.sub(cur:GetName(), 1, 8) == "ULZombie" then
+    if cur ~= z then SodCoop.zById[id] = cur end
+    return cur
+  end
   SodCoop.zById[id] = nil
   return nil
+end
+-- Host: zumbi conduzido reage ao golpe (para, cancela o golpe dele e toca a reação). A vida
+-- já foi tirada pela DLL (SetHealth nativo, depois de conferir o ator).
+function SodCoop.ZHitReact(id)
+  local c = SodCoop.zc[id]
+  if c then
+    c.anim = SodCoop.zReact
+    c.hpAnim = nil
+    c.hitAt = nil
+    c.busyUntil = SodCoop.zNow + 0.45
+    c.strikeAt = math.max(c.strikeAt, SodCoop.zNow - 1.0)
+  end
 end
 -- Host: dano de um golpe do cliente no zumbi id. Mata pelo caminho normal do jogo
 -- (Kill: animação de morte e corpo); só SetHealth(0) apagaria o zumbi.
@@ -216,7 +235,12 @@ function SodCoop.PlayerHurt(dmg, zx, zy)
   -- desliza até ela acabar (2026-11-03).
   local okv, v = pcall(a.GetVelocity, a)
   local slow = okv and v and (v.x * v.x + v.y * v.y) < 1.5 * 1.5
-  if zx and slow then
+  -- No máximo uma reação a cada 1,2 s: com vários zumbis, uma reação atrás da outra tirava o
+  -- controle do jogador (2026-11-04).
+  local okt, now = pcall(System.GetCurrTime)
+  if not okt or type(now) ~= "number" then now = (SodCoop.reactUntil or 0) end
+  if zx and slow and now >= (SodCoop.reactUntil or 0) then
+    SodCoop.reactUntil = now + 1.2
     local p, yaw = a:GetWorldPos(), a:GetWorldAngles().z
     local front = (zx - p.x) * -math.sin(yaw) + (zy - p.y) * math.cos(yaw) >= 0
     pcall(a.StartAnimation, a, 0, front and "React_mid_front" or "React_mid_back", 0, 0.1, 1, false)
@@ -271,7 +295,8 @@ function SodCoop.MeleeAssist(x, y)
   if dx * dx + dy * dy < 0.0025 then return end
   a:SetWorldAngles({ x = 0, y = 0, z = math.atan2(-dx, dy) })
 end
--- Cliente: granadas do jogador local (entidades ULGrenade_*, ex.: ULGrenade_PipeBombStrong).
+-- Cliente: granadas do jogador local (entidades ULGrenade_*, ex.: ULGrenade_PipeBombStrong, e
+-- a garrafa da Molotov, UL_Molotov_*, ex.: UL_Molotov_Alcohol).
 -- A que sumiu explodiu: devolve "classe,x,y,z;" de cada uma (posição da última leitura).
 SodCoop.gTrack = SodCoop.gTrack or {}
 function SodCoop.GrenadeWatch()
@@ -280,7 +305,7 @@ function SodCoop.GrenadeWatch()
   local seen, out = {}, ""
   for _, e in ipairs(System.GetEntitiesInSphere(a:GetWorldPos(), 80) or {}) do
     local c = tostring(e.class)
-    if string.sub(c, 1, 9) == "ULGrenade" then
+    if string.sub(c, 1, 9) == "ULGrenade" or string.sub(c, 1, 11) == "UL_Molotov_" then
       local p = e:GetWorldPos()
       SodCoop.gTrack[e.id] = { c = c, x = p.x, y = p.y, z = p.z }
       seen[e.id] = true
@@ -290,6 +315,19 @@ function SodCoop.GrenadeWatch()
     if not seen[id] then
       out = out .. string.format("%s,%.2f,%.2f,%.2f;", t.c, t.x, t.y, t.z)
       SodCoop.gTrack[id] = nil
+    end
+  end
+  return out
+end
+-- Cliente: poças de fogo da Molotov (ULMolotovPool, ficam alguns segundos): "x,y,z;" de cada uma.
+function SodCoop.FirePools()
+  local a = g_localActor
+  if not a then return "" end
+  local out = ""
+  for _, e in ipairs(System.GetEntitiesInSphere(a:GetWorldPos(), 80) or {}) do
+    if tostring(e.class) == "ULMolotovPool" then
+      local p = e:GetWorldPos()
+      out = out .. string.format("%.2f,%.2f,%.2f;", p.x, p.y, p.z)
     end
   end
   return out
@@ -558,7 +596,9 @@ void deliverHit(const net::HitEvent& hit) {
 }  // zumbi sem fantoche ainda -> desde quando espera a aparência
 bool g_clientWorld = false;  // já desligou os zumbis locais neste mundo
 constexpr double kDownTime = 5.0;  // s caído depois do golpe fatal, antes de voltar ao lado do host
+constexpr double kRiseGrace = 8.0;  // s sem levar golpe depois de levantar
 double g_downUntil = 0;            // 0 = de pé
+double g_graceUntil = 0;           // depois de levantar, os golpes não contam até aqui
 double g_nextLocalCheck = 0;
 
 }  // namespace
@@ -589,6 +629,20 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
                 if (skipped++ < 20)
                     log::info("zombies: golpe do cliente no zumbi %u ignorado (%s)", hit.zombieId,
                               !readable ? "sem ator" : a[0x17A9] ? "sem maquina de estados" : "vida 0");
+                continue;
+            }
+            // Golpe que não mata: SetHealth nativo (vtable +0x5C) no mesmo ator conferido acima,
+            // sem passar pelo Lua. O Lua só entra para matar (Kill) e para a reação.
+            if (health - hit.damage > 0) {
+                using SetHealth_t = void(__thiscall*)(void*, float);
+                void* const* vt = *reinterpret_cast<void* const* const*>(actor);
+                log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: vida %.0f -> %.0f (nativo, flag %d)",
+                          hit.kind ? "tiro" : "corpo a corpo", hit.damage, hit.zombieId, health,
+                          health - hit.damage, a[0x17A9]);
+                reinterpret_cast<SetHealth_t>(vt[engine::vt::kActor_SetHealth / 4])(actor, health - hit.damage);
+                char react[64];
+                snprintf(react, sizeof(react), "SodCoop.ZHitReact(%u)", hit.zombieId);
+                engine::executeLua(react, "sodcoop_zreact");
                 continue;
             }
         }
@@ -728,7 +782,10 @@ void updateClient(const Config& cfg, bool inWorld, const engine::Vec3& self) {
     const double now = clock::seconds();
 
     for (const net::HitEvent& hit : net::takeHits()) {
-        if (hit.kind != 2 || g_downUntil > 0) continue;  // caído: os golpes não contam
+        // Caído, ou logo depois de levantar: os golpes não contam. Sem a folga, ferido (o jogo
+        // limita a vida máxima) e de volta no meio dos zumbis, o primeiro golpe o derrubava de
+        // novo, num ciclo sem fim (2026-11-04).
+        if (hit.kind != 2 || g_downUntil > 0 || now < g_graceUntil) continue;
         char expr[96];
         auto zp = g_puppets.find(hit.zombieId);
         if (zp != g_puppets.end())
@@ -888,6 +945,7 @@ bool clientDowned() { return g_downUntil > 0; }
 bool clientRise(const engine::Vec3& host) {
     if (g_downUntil <= 0 || clock::seconds() < g_downUntil) return false;
     g_downUntil = 0;
+    g_graceUntil = clock::seconds() + kRiseGrace;
     char expr[128];
     snprintf(expr, sizeof(expr), "SodCoop.PlayerRise(%.2f, %.2f, %.2f)", host.x + 2.0f, host.y, host.z + 0.5f);
     std::string result;
@@ -917,9 +975,10 @@ void updateGrenades(const Config& cfg, bool settled) {
             sscanf(item.c_str() + comma + 1, "%f,%f,%f", &x, &y, &z) != 3)
             continue;
         memcpy(cls, item.data(), comma);
-        // Molotov queima (dano menor); as outras explodem (mata quem estiver perto).
+        // Molotov: só o impacto da garrafa aqui (o fogo vem das poças, abaixo); as outras
+        // explodem (mata quem estiver perto).
         const bool fire = strstr(cls, "Molotov") != nullptr;
-        const float radius = fire ? 4.0f : 6.0f, damage = fire ? 60.0f : 400.0f;
+        const float radius = fire ? 2.5f : 6.0f, damage = fire ? 30.0f : 400.0f;
         int hits = 0;
         for (const auto& [id, p] : g_puppets) {
             if (p.dead) continue;
@@ -935,6 +994,57 @@ void updateGrenades(const Config& cfg, bool settled) {
         log::info("zombies: %s do cliente explodiu em (%.1f, %.1f, %.1f): %d zumbi(s) a ate %.0f m, %.0f de dano",
                   cls, x, y, z, hits, radius, damage);
     }
+}
+
+// Cliente: zumbi que encosta numa poça de fogo da Molotov pega fogo e leva dano a cada 0,5 s
+// por 4 s, mesmo depois de sair da poça (as poças duram pouco e o zumbi anda; só a poça dava
+// 65 de dano, e um zumbi comum tem 100; 2026-11-04).
+std::map<uint32_t, double> g_burning;  // zumbi -> até quando queima
+void updateFirePools(const Config& cfg, bool settled) {
+    static double next = 0;
+    const double now = clock::seconds();
+    if (!settled) g_burning.clear();
+    if (!cfg.enabled || !settled || now < next || g_puppets.empty()) return;
+    next = now + 0.5;
+    constexpr float kPoolRadius = 2.5f, kBurnDamage = 15.0f;
+    constexpr double kBurnTime = 4.0;
+    std::string out;
+    if (!puppet::readLuaText("SodCoop.FirePools()", out)) out.clear();
+    std::map<uint32_t, bool> burned;  // uma vez por rodada, mesmo em cima de várias poças
+    size_t start = 0;
+    while (start < out.size()) {
+        size_t end = out.find(';', start);
+        if (end == std::string::npos) end = out.size();
+        float x = 0, y = 0, z = 0;
+        const bool ok = sscanf(out.c_str() + start, "%f,%f,%f", &x, &y, &z) == 3;
+        start = end + 1;
+        if (!ok) continue;
+        for (const auto& [id, p] : g_puppets) {
+            if (p.dead || burned.count(id)) continue;
+            const float dx = p.pos.x - x, dy = p.pos.y - y, dz = p.pos.z - z;
+            if (dx * dx + dy * dy > kPoolRadius * kPoolRadius || std::fabs(dz) > 2.0f) continue;
+            g_burning[id] = now + kBurnTime;
+        }
+    }
+    for (auto it = g_burning.begin(); it != g_burning.end();) {
+        auto p = g_puppets.find(it->first);
+        if (now > it->second || p == g_puppets.end() || p->second.dead) {
+            it = g_burning.erase(it);
+            continue;
+        }
+        burned[it->first] = true;
+        ++it;
+    }
+    for (const auto& [id, b] : burned) {
+        net::HitEvent hit;
+        hit.zombieId = id;
+        hit.kind = static_cast<uint8_t>(AttackKind::Shot);
+        hit.damage = kBurnDamage;
+        deliverHit(hit);
+    }
+    static int logs = 0;
+    if (!burned.empty() && logs++ < 30)
+        log::info("zombies: fogo da Molotov do cliente queimou %zu zumbi(s) (%.0f de dano)", burned.size(), kBurnDamage);
 }
 
 void onLocalAttack(const Config& cfg, AttackKind kind, const engine::Vec3& self, float yaw,
