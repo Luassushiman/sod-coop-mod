@@ -46,6 +46,10 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 
 Detalhes técnicos e histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
 
+## 🖥️ Mod à parte: resolução 2560×1440
+
+O menu de opções do jogo não tem **2560×1440** em 16:9: depois de 1920×1080, ele pula direto para 4K. O mod de co-op **já inclui** a correção, e ela também existe como **mod separado**, só com isso, para quem quiser apenas a resolução: [mods/resolution_1440p](mods/resolution_1440p/README.md).
+
 ---
 
 ## 💚 Apoie o projeto
@@ -73,6 +77,7 @@ a0c80cfc-ec1f-4183-9b24-1c29d5a50471
 |---|---|
 | `src/` | DLL do mod (proxy de `dinput8.dll`, x86): `core/` (log, configuração, relógio, janela), `game/` (motor, jogador local, personagem remoto, hooks por frame), `net/` (protocolo UDP e sessão), `proxy/` |
 | `build.ps1` | Compila `build\dinput8.dll` |
+| `mods/resolution_1440p/` | Mod à parte que põe 2560×1440 no menu de opções (sem o co-op) |
 | `install.ps1` | Instala/remove o mod nas cópias de teste |
 | `launch.ps1` / `tile_windows.ps1` | Abre as duas cópias do jogo lado a lado |
 | `analysis/` | Scripts de engenharia reversa (Ghidra) |

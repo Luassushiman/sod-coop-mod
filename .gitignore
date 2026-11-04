@@ -24,6 +24,7 @@
 
 # Saída de compilação
 /build/
+/mods/*/build/
 
 # Arquivos gerados pelo jogo/mod dentro de cópias fora de testenv
 sodcoop_*.log
