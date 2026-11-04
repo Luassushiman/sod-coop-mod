@@ -414,11 +414,14 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
                                  : moveAim ? std::string(g_gait == Gait::Walk ? kWalkAimClip : kRunAimClip)
                                  : useBase ? std::string(s.base)
                                            : clipFor(g_gait, anim);
-        if (clip != g_clip) {
+        static DWORD clipRetryMs = 0;
+        if (clip != g_clip && now >= clipRetryMs) {
             if (useBase || standAim || moveAim) log::info("remote_player: postura %s", clip.c_str());
             if (g_rate != 1.0f && puppet::setAnimationRate(1.0f)) g_rate = 1.0f;
-            puppet::playAnimation(clip, 1.0f);  // falha já vai para o log
-            g_clip = clip;  // não repete a cada frame se falhar
+            // Falha (animação ainda carregando: o jogo as carrega sob demanda) tenta de novo em
+            // 0,25 s; antes o fantoche ficava sem animação (em T).
+            if (puppet::playAnimation(clip, 1.0f)) g_clip = clip;
+            else clipRetryMs = now + 250;
         }
     }
 

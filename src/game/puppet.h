@@ -24,6 +24,10 @@ bool spawn(const std::string& model, const engine::Vec3& pos, int drivenMotion);
 // esse osso fique horizontalmente sobre pos.
 bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone = "");
 
+// Sentado num banco de carro (pos = ponto do banco): põe o quadril no assento, compensando o
+// deslocamento das animações de carro.
+bool moveSeated(const engine::Vec3& seat, float yaw);
+
 // Toca uma animação no fantoche (nome do .chrparams). Sem loop, confere antes
 // se o modelo tem a animação. O nome só pode ter letras, dígitos e '_'.
 // layer: camada do esqueleto (0 = corpo inteiro; 2 = parte de cima do remetente).

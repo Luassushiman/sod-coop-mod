@@ -61,6 +61,21 @@ function SodCoop.PuppetRagdoll(step)
   local h = e:GetBonePos("Bip01 Head", SodCoop.tmpBone)
   if h then e:AddImpulse(-1, h, { x = 0, y = 0, z = -1 }, 100, 1) end
 end
+-- Sentado num carro: as animações de carro deslocam o corpo da raiz (pose de dirigir num
+-- esqueleto feminino: quadril 1,1 m à frente e 0,9 m acima, 2026-11-04); no jogador o jogo
+-- compensa. Põe o quadril 0,10 m atrás e 0,15 m acima do ponto do banco, como no jogador.
+function SodCoop.SeatPuppet(x, y, z, yaw)
+  if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
+  local e = SodCoop.puppet
+  e:SetWorldAngles({ x = 0, y = 0, z = yaw })
+  e:SetWorldPos({ x = x, y = y, z = z })
+  local b = e:GetBonePos("Bip01 Pelvis", SodCoop.tmpBone)
+  if b then
+    local tx, ty, tz = x + 0.10 * math.sin(yaw), y - 0.10 * math.cos(yaw), z + 0.15
+    local dx, dy, dz = tx - b.x, ty - b.y, tz - b.z
+    if dx * dx + dy * dy + dz * dz < 9 then e:SetWorldPos({ x = x + dx, y = y + dy, z = z + dz }) end
+  end
+end
 function SodCoop.RemovePuppet()
   if SodCoop.PuppetAlive() then System.RemoveEntity(SodCoop.puppet.id) end
   SodCoop.puppet = nil
@@ -73,7 +88,9 @@ function SodCoop.PlayPuppetAnim(name, speed, loop, blend, layer)
     local len = e:GetAnimationLength(0, name)
     if not len or len <= 0 then error("sodcoop: animacao inexistente no fantoche: " .. name) end
   end
-  e:StartAnimation(0, name, layer, blend, speed, loop)
+  -- false: o jogo ainda está carregando a animação (pacotes de animação vêm sob demanda; visto
+  -- com as de carro num esqueleto feminino, 2026-11-04). O erro faz o C++ pedir de novo.
+  if not e:StartAnimation(0, name, layer, blend, speed, loop) then error("sodcoop: animacao ainda nao carregada: " .. name) end
   e:ForceCharacterUpdate(0, true)
 end
 -- Pose fixa: toca a animação parada no tempo normalizado t (velocidade 0, em loop).
@@ -82,7 +99,7 @@ function SodCoop.HoldPuppetPose(name, t, layer)
   local e = SodCoop.puppet
   local len = e:GetAnimationLength(0, name)
   if not len or len <= 0 then error("sodcoop: animacao inexistente no fantoche: " .. name) end
-  e:StartAnimation(0, name, layer, 0.2, 0, true)
+  if not e:StartAnimation(0, name, layer, 0.2, 0, true) then error("sodcoop: animacao ainda nao carregada: " .. name) end
   e:SetAnimationTime(0, layer, t)
   e:ForceCharacterUpdate(0, true)
 end
@@ -229,6 +246,12 @@ bool ragdoll(int step) {
     return engine::executeLua(code, "sodcoop_ragdoll");
 }
 
+bool moveSeated(const engine::Vec3& seat, float yaw) {
+    char code[160];
+    snprintf(code, sizeof(code), "SodCoop.SeatPuppet(%.3f, %.3f, %.3f, %.4f)", seat.x, seat.y, seat.z, yaw);
+    return engine::executeLua(code, "sodcoop_seat");
+}
+
 bool move(const engine::Vec3& pos, float yaw, const std::string& rootBone) {
     char code[256];
     snprintf(code, sizeof(code), "SodCoop.MovePuppet(%.3f, %.3f, %.3f, %.4f, \"%s\")", pos.x, pos.y, pos.z, yaw,
@@ -248,7 +271,9 @@ bool playAnimation(const std::string& name, float speed, bool loop, float blendS
     snprintf(code, sizeof(code), "SodCoop.PlayPuppetAnim(\"%s\", %.3f, %s, %.3f, %d)", name.c_str(), speed,
              loop ? "true" : "false", blendSec, layer);
     bool ok = engine::executeLua(code, "sodcoop_anim");
-    if (!ok) log::warn("puppet: animacao '%s' falhou", name.c_str());
+    static int failures = 0;  // quem chama pode tentar de novo enquanto a animação carrega
+    if (!ok && (++failures <= 5 || failures % 100 == 0))
+        log::warn("puppet: animacao '%s' falhou (%d falha(s))", name.c_str(), failures);
     return ok;
 }
 
@@ -319,7 +344,11 @@ bool holdPose(const std::string& name, float time, int layer) {
     char code[192];
     snprintf(code, sizeof(code), "SodCoop.HoldPuppetPose(\"%s\", %.3f, %d)", name.c_str(), time, layer);
     bool ok = engine::executeLua(code, "sodcoop_pose");
-    log::info("puppet: pose fixa '%s' t=%.2f camada %d -> %s", name.c_str(), time, layer, ok ? "OK" : "FALHOU");
+    // Quem chama tenta de novo a cada frame enquanto a animação carrega: só as primeiras falhas vão ao log.
+    static int failures = 0;
+    if (ok || ++failures <= 3)
+        log::info("puppet: pose fixa '%s' t=%.2f camada %d -> %s", name.c_str(), time, layer, ok ? "OK" : "FALHOU");
+    if (ok) failures = 0;
     return ok;
 }
 

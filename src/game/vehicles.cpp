@@ -26,6 +26,9 @@ SodCoop = SodCoop or {}
 -- No carro do outro jogador: "P chave assento" (passageiro); se o jogo o pôs no volante
 -- (ao entrar, ou o "usar" que passa o passageiro para o volante), volta para o banco do
 -- passageiro. A posição do passageiro não serve: o jogo a deixa no ponto do motorista.
+-- Só é o carro do outro se ele o dirige agora (SodCoop.remoteDriving, do C++) ou se eu não
+-- estou no volante: senão um carro que o outro já dirigiu nunca mais podia ser dirigido
+-- daqui (o jogador era tirado do volante, 2026-11-04).
 function SodCoop.LocalVehicle()
   local a = g_localActor
   if not a or not a.actor then return "" end
@@ -35,12 +38,27 @@ function SodCoop.LocalVehicle()
   if not v or not v.vehicle then return "" end
   local p, g = v:GetWorldPos(), v:GetWorldAngles()
   for key, e in pairs(SodCoop.rvs or {}) do
-    if tostring(e.id) == tostring(v.id) then
-      local seat = v.vehicle:GetSeatForPassenger(a.id) or 0
+    local seat = tostring(e.id) == tostring(v.id) and (v.vehicle:GetSeatForPassenger(a.id) or 0)
+    local driving = tostring(key) == tostring(SodCoop.remoteDriving or 0)
+    if seat and (driving or seat ~= 1) then
       -- Entrando pela porta do passageiro, o jogo desliza para o volante vazio. ChangeSeat
       -- recebe uma escolha, não o assento: 2 leva do volante (1) para o lado dele (3).
-      if seat == 1 then v.vehicle:ChangeSeat(a.id, 2, false) end
+      if seat == 1 and driving then v.vehicle:ChangeSeat(a.id, 2, false) end
       return string.format("P %s %d", tostring(key), seat)
+    end
+  end
+  -- Carro que o mod estacionou com o motor desligado (ParkRemoteVehicle): religa, senão o
+  -- jogador daqui não consegue dar partida nele. Religar no instante em que ele senta não
+  -- bastou; 1 s depois, desligar e ligar de novo (com o movimento) funcionou (2026-11-04).
+  if v.sodcoopEngineOff then
+    local t = System.GetCurrTime()
+    v.sodcoopRestartAt = v.sodcoopRestartAt or t + 1.0
+    if t >= v.sodcoopRestartAt then
+      pcall(v.Event_DisableEngine, v)
+      pcall(v.Event_EnableEngine, v)
+      pcall(v.Event_EnableMovement, v)
+      v.sodcoopEngineOff = nil
+      v.sodcoopRestartAt = nil
     end
   end
   local q = a:GetWorldPos()
@@ -52,8 +70,10 @@ function SodCoop.LocalVehicle()
   return string.format("%s %.3f %.3f %.3f %.4f %.4f %.4f %s %s %.3f %.3f %.3f", v.class, p.x, p.y, p.z, g.x, g.y,
     g.z, id, name, dx * c - dy * s, dx * s + dy * c, q.z - p.z)
 end
--- Carros do outro jogador, um por carro dele (chave = id do carro lá). Sem física
--- enquanto ele dirige (movido a cada frame); com física quando estacionado. Com o save
+-- Carros do outro jogador, um por carro dele (chave = id do carro lá). Enquanto ele dirige,
+-- o carro daqui fica com física e motor ligados e recebe a cada frame a pose e a velocidade
+-- do de lá: com a física desligada as rodas não giravam, e sem motor o freio as travava
+-- (2026-11-04). Estacionado: motor desligado (o freio segura). Com o save
 -- copiado, o carro dele costuma existir aqui também (mesmo nome e classe, outro id):
 -- esse é usado ("emprestado"); senão, um carro é criado.
 SodCoop.rvs = SodCoop.rvs or {}
@@ -74,7 +94,23 @@ function SodCoop.FindSameCar(class, name, x, y, z)
   end
   return best
 end
-function SodCoop.RemoteVehicle(key, class, name, x, y, z, ax, ay, az)
+-- Peças das rodas: slots nos cantos do carro, a 0,2-0,9 m de altura (Suv_New: slots 1 a 4).
+function SodCoop.WheelSlots(e)
+  local c, yaw = e:GetWorldPos(), e:GetWorldAngles().z
+  local cs, sn = math.cos(-yaw), math.sin(-yaw)
+  local out = {}
+  for i = 1, math.min(e:GetSlotCount() - 1, 16) do
+    local ok, p = pcall(e.GetSlotWorldPos, e, i)
+    if ok and p then
+      local dx, dy, dz = p.x - c.x, p.y - c.y, p.z - c.z
+      local lx, ly = dx * cs - dy * sn, dx * sn + dy * cs
+      if dz > 0.2 and dz < 0.9 and math.abs(lx) > 0.5 and math.abs(lx) < 1.5 and math.abs(ly) > 0.8 and
+         math.abs(ly) < 3 then out[#out + 1] = i end
+    end
+  end
+  return out
+end
+function SodCoop.RemoteVehicle(key, class, name, x, y, z, ax, ay, az, vx, vy, vz, wz)
   local e = SodCoop.rvs[key]
   if e and (not System.GetEntity(e.id) or e.class ~= class) then
     if System.GetEntity(e.id) and not e.sodcoopBorrowed then System.RemoveEntity(e.id) end
@@ -111,23 +147,60 @@ function SodCoop.RemoteVehicle(key, class, name, x, y, z, ax, ay, az)
     end
   end
   if e.sodcoopParked then
-    e:EnablePhysics(false)
+    e:EnablePhysics(true)
+    pcall(e.Event_EnableEngine, e)
+    pcall(e.Event_EnableMovement, e)
+    e.sodcoopEngineOff = nil
     e.sodcoopParked = false
   end
-  e:SetWorldPos({ x = x, y = y, z = z })
-  e:SetWorldAngles({ x = ax, y = ay, z = az })
+  -- A física move o carro: velocidade de lá mais uma correção para a pose de lá. Pôr a pose
+  -- a cada frame (SetWorldPos) deixava as rodas paradas; só teleporta se ficou longe.
+  local p, g = e:GetWorldPos(), e:GetWorldAngles()
+  local ex, ey, ez = x - p.x, y - p.y, z - p.z
+  local eyaw = az - g.z
+  while eyaw > math.pi do eyaw = eyaw - 2 * math.pi end
+  while eyaw < -math.pi do eyaw = eyaw + 2 * math.pi end
+  if ex * ex + ey * ey > 9 or math.abs(ez) > 3 or math.abs(eyaw) > 1.2 then
+    e:SetWorldPos({ x = x, y = y, z = z })
+    e:SetWorldAngles({ x = ax, y = ay, z = az })
+    ex, ey, ez, eyaw = 0, 0, 0, 0
+  end
+  e:AwakePhysics(1)
+  e:SetPhysicParams(PHYSICPARAM_VELOCITY, { v = { x = vx + ex * 3, y = vy + ey * 3, z = vz + ez },
+                                            w = { x = 0, y = 0, z = wz + eyaw * 3 } })
+  -- As rodas não giram com a velocidade imposta a cada frame: gira as peças delas pela
+  -- distância andada (raio ~0,45 m), como no carro de lá.
+  e.sodcoopWheels = e.sodcoopWheels or SodCoop.WheelSlots(e)
+  local t = System.GetCurrTime()
+  local dt = e.sodcoopWheelT and math.min(t - e.sodcoopWheelT, 0.1) or 0
+  e.sodcoopWheelT = t
+  local fwd = -math.sin(az) * vx + math.cos(az) * vy
+  e.sodcoopWheelA = ((e.sodcoopWheelA or 0) + fwd * dt / 0.45) % (2 * math.pi)
+  for _, s in ipairs(e.sodcoopWheels) do pcall(e.SetSlotAngles, e, s, { x = e.sodcoopWheelA, y = 0, z = 0 }) end
 end
 -- O outro jogador saiu: o carro fica onde está, com física (colide e fica no chão).
 function SodCoop.ParkRemoteVehicle(key)
   local e = SodCoop.rvs[key]
   if not e or not System.GetEntity(e.id) then SodCoop.rvs[key] = nil; return end
   e:EnablePhysics(true)
+  pcall(e.Event_DisableEngine, e)
+  e.sodcoopEngineOff = true
+  e.sodcoopRestartAt = nil
   e.sodcoopParked = true
 end
 function SodCoop.RemoveRemoteVehicles()
   for k, e in pairs(SodCoop.rvs) do
     if System.GetEntity(e.id) then
-      if e.sodcoopBorrowed then e:EnablePhysics(true) else System.RemoveEntity(e.id) end
+      if e.sodcoopBorrowed then
+        e:EnablePhysics(true)
+        if e.sodcoopEngineOff then
+          pcall(e.Event_EnableEngine, e)
+          pcall(e.Event_EnableMovement, e)
+          e.sodcoopEngineOff = nil
+        end
+      else
+        System.RemoveEntity(e.id)
+      end
     end
   end
   SodCoop.rvs = {}
@@ -239,7 +312,7 @@ void updatePassenger(const net::RemoteState& remote) {
     const float yaw = g_myCarAng[2];
     const float c = std::cos(yaw), s = std::sin(yaw);
     const engine::Vec3 seat{p[0] + o[0] * c - o[1] * s, p[1] + o[0] * s + o[1] * c, p[2] + o[2]};
-    puppet::move(seat, yaw, "");
+    puppet::moveSeated(seat, yaw);
     const unsigned spawn = remote_player::spawnCount();
     if (spawn == g_posedSpawn && g_posedSitting) return;
     for (const char* pose : kSitPoses) {
@@ -255,8 +328,18 @@ void updatePassenger(const net::RemoteState& remote) {
 }
 }  // namespace
 
+// Conta ao Lua (SodCoop.LocalVehicle) qual carro o outro jogador dirige agora.
+void publishDriving() {
+    static uint32_t published = ~0u;
+    if (published == g_driving || !g_helpersReady) return;
+    char code[64];
+    snprintf(code, sizeof(code), "SodCoop.remoteDriving = %u", g_driving);
+    if (engine::executeLua(code, "sodcoop_vehicle")) published = g_driving;
+}
+
 bool updateRemote(const net::RemoteState& remote, bool settled) {
     const double now = clock::seconds();
+    publishDriving();
     const bool inVehicle = remote.connected && remote.state.hasPlayer && isClassName(remote.state.vehicle);
     if (!settled) {
         g_myCar = 0;
@@ -321,10 +404,17 @@ bool updateRemote(const net::RemoteState& remote, bool settled) {
         snprintf(park, sizeof(park), "SodCoop.ParkRemoteVehicle(%u)", g_driving);
         engine::executeLua(park, "sodcoop_vehicle");
     }
-    char code[256];
+    // Velocidade entre as duas amostras (as rodas giram com ela; ver SodCoop.RemoteVehicle).
+    float v[3] = {}, wz = 0;
+    if (span > 0.001 && span < 1.0) {
+        for (int i = 0; i < 3; ++i) v[i] = static_cast<float>((g_cur.pos[i] - g_prev.pos[i]) / span);
+        wz = static_cast<float>(wrapAngle(g_cur.ang[2] - g_prev.ang[2]) / span);
+    }
+    char code[320];
     const char* name = isClassName(remote.state.vehicleName) ? remote.state.vehicleName : "-";
-    snprintf(code, sizeof(code), "SodCoop.RemoteVehicle(%u, \"%s\", \"%s\", %.3f, %.3f, %.3f, %.4f, %.4f, %.4f)",
-             car, g_cur.cls.c_str(), name, p[0], p[1], p[2], g[0], g[1], g[2]);
+    snprintf(code, sizeof(code),
+             "SodCoop.RemoteVehicle(%u, \"%s\", \"%s\", %.3f, %.3f, %.3f, %.4f, %.4f, %.4f, %.3f, %.3f, %.3f, %.3f)",
+             car, g_cur.cls.c_str(), name, p[0], p[1], p[2], g[0], g[1], g[2], v[0], v[1], v[2], wz);
     const bool ok = engine::executeLua(code, "sodcoop_vehicle");
     if (ok && g_driving != car) {
         char expr[96];
@@ -345,7 +435,7 @@ bool updateRemote(const net::RemoteState& remote, bool settled) {
         const float c = std::cos(g[2]), s = std::sin(g[2]);
         const engine::Vec3 seat{p[0] + g_seat[0] * c - g_seat[1] * s, p[1] + g_seat[0] * s + g_seat[1] * c,
                                 p[2] + g_seat[2]};
-        puppet::move(seat, g[2], "");
+        puppet::moveSeated(seat, g[2]);
         const unsigned spawn = remote_player::spawnCount();
         if ((spawn != g_posedSpawn || g_posedSitting) && puppet::holdPose(kDrivePose, 0.5f, 0)) {
             g_posedSpawn = spawn;
