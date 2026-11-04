@@ -15,6 +15,7 @@
 #include "core/log.h"
 #include "game/anim_watch.h"
 #include "game/appearance.h"
+#include "game/frame.h"
 #include "game/puppet.h"
 #include "net/session.h"
 
@@ -574,6 +575,23 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
     if (!ensureHelpers()) return;
     for (const net::HitEvent& hit : net::takeHits()) {
         if (hit.kind > 1) continue;
+        // ULActor::SetHealth (0x0138C930) fecha o jogo (assert -> ExitProcess) se o ator já
+        // não tem máquina de estados (byte +0x17A9: zumbi sendo descarregado) ou se a vida é 0
+        // e o valor novo > 0. O Kill também passa por ele. Confere antes, na memória.
+        {
+            void* actor = engine::getActor(frame::gameFramework(), hit.zombieId);
+            const char* a = static_cast<const char*>(actor);
+            float health = 0;
+            const bool readable = a && engine::isReadable(a + 0x17A9, 1) && engine::isReadable(a + 0x58, 4);
+            if (readable) health = *reinterpret_cast<const float*>(a + 0x58);
+            if (!readable || a[0x17A9] != 0 || !(health > 0)) {
+                static int skipped = 0;
+                if (skipped++ < 20)
+                    log::info("zombies: golpe do cliente no zumbi %u ignorado (%s)", hit.zombieId,
+                              !readable ? "sem ator" : a[0x17A9] ? "sem maquina de estados" : "vida 0");
+                continue;
+            }
+        }
         char expr[96];
         snprintf(expr, sizeof(expr), "SodCoop.ZDamage(%u, %.1f)", hit.zombieId, hit.damage);
         // Antes de aplicar: se o jogo fechar dentro do ZDamage, o log mostra em qual zumbi.
