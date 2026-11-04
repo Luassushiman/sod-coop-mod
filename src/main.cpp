@@ -155,6 +155,37 @@ const std::string& localWeapon(bool inWorld, DWORD now) {
     return weapon;
 }
 
+// Tiros de pistola do jogador local, contados pela munição do pente que cai (lida a cada
+// 50 ms). A pistola não tem animação de tiro nas camadas do jogador; o outro lado toca
+// uma no fantoche. Só conta com a aim pose de pistola (fuzil e espingarda já têm a sua).
+uint16_t localPistolShots(bool inWorld, DWORD now) {
+    static uint16_t shots = 0;
+    static std::string lastItem;
+    static int lastAmmo = -1;
+    static DWORD lastPoll = 0;
+    if (!inWorld) {
+        lastItem.clear();
+        lastAmmo = -1;
+        return shots;
+    }
+    if (now - lastPoll < 50) return shots;
+    lastPoll = now;
+    std::string text;
+    if (!puppet::readLuaText("SodCoop.LocalAmmo()", text)) return shots;
+    const size_t colon = text.rfind(':');
+    const std::string item = colon == std::string::npos ? std::string() : text.substr(0, colon);
+    const int ammo = colon == std::string::npos ? -1 : atoi(text.c_str() + colon + 1);
+    const bool pistol = strcmp(anim_watch::currentAimPose().name, "AimPoses_pistol") == 0;
+    if (pistol && item == lastItem && lastAmmo > 0 && ammo >= 0 && ammo < lastAmmo) {
+        shots = static_cast<uint16_t>(shots + 1);
+        static int logged = 0;
+        if (logged++ < 20) log::info("arma: tiro de pistola %u (pente %d -> %d)", shots, lastAmmo, ammo);
+    }
+    lastItem = item;
+    lastAmmo = ammo;
+    return shots;
+}
+
 // Ferramenta de teste: se existir sodcoop_cmd.lua ao lado do exe, executa uma vez
 // (thread principal) e apaga. Ex.: System.ExecuteCommand("i_giveitem Pistol_M9").
 // Só com o jogador já no mundo: entidades criadas durante o carregamento do nível
@@ -499,7 +530,19 @@ void onFrame() {
         snprintf(mine.weapon, sizeof(mine.weapon), "%s", localWeapon(settled, now).c_str());
         memcpy(mine.base, anim_watch::currentBase().name, sizeof(mine.base));
         memcpy(mine.upper, anim_watch::currentUpper().name, sizeof(mine.upper));
-        mine.upperSeq = anim_watch::currentUpper().seq;
+        {
+            // Tiro de pistola: vai como animação da parte de cima (o seq soma os dois
+            // contadores, então muda a cada tiro e a cada animação nova da camada 1).
+            static uint16_t lastShots = 0;
+            static DWORD shotAt = 0;
+            const uint16_t shots = localPistolShots(settled, now);
+            if (shots != lastShots) {
+                lastShots = shots;
+                shotAt = now;
+            }
+            if (shotAt && now - shotAt < 350) snprintf(mine.upper, sizeof(mine.upper), "%s", "Gun_shoot_revolver");
+            mine.upperSeq = static_cast<uint16_t>(anim_watch::currentUpper().seq + shots);
+        }
         memcpy(mine.aimPose, anim_watch::currentAimPose().name, sizeof(mine.aimPose));
         mine.dead = settled && (localDead(id) || zombies::clientDowned());
         float hour;

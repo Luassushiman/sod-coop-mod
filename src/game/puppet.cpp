@@ -76,7 +76,16 @@ function SodCoop.SeatPuppet(x, y, z, yaw)
     if dx * dx + dy * dy + dz * dz < 9 then e:SetWorldPos({ x = x + dx, y = y + dy, z = z + dz }) end
   end
 end
+function SodCoop.RemovePuppetWeapon()
+  local w = SodCoop.weaponEnt
+  if w and System.GetEntity(w.id) then System.RemoveEntity(w.id) end
+  SodCoop.weaponEnt = nil
+  local l = SodCoop.flashEnt
+  if l and System.GetEntity(l.id) then System.RemoveEntity(l.id) end
+  SodCoop.flashEnt = nil
+end
 function SodCoop.RemovePuppet()
+  SodCoop.RemovePuppetWeapon()
   if SodCoop.PuppetAlive() then System.RemoveEntity(SodCoop.puppet.id) end
   SodCoop.puppet = nil
 end
@@ -173,14 +182,65 @@ function SodCoop.LocalWeapon()
   end
   return (item and item:GetName() or "") .. "|" .. diag
 end
+-- Munição no pente da arma na mão do jogador local ("nome do item:munição"; "" sem arma).
+-- O tiro de pistola não tem animação nas camadas do jogador (recuo procedural): a DLL
+-- detecta o tiro pela munição que cai.
+function SodCoop.LocalAmmo()
+  local p = g_localActorId and System.GetEntity(g_localActorId)
+  local it = p and p.inventory and p.inventory:GetCurrentItem()
+  if not it or not it.weapon or not it.weapon.GetAmmoCount then return "" end
+  return it:GetName() .. ":" .. tostring(it.weapon:GetAmmoCount() or -1)
+end
+-- Tiro do fantoche: luz laranja curta no cano, cápsula e traçante. Os clarões do jogo
+-- (Class3_WeaponFX.muzzleflashes.*) carregam mas não aparecem soltos no mundo, nem com
+-- SpawnEffect nem num slot de entidade (testado 2026-11-04); luz, cápsula
+-- (Class3_WeaponFX.shells.*) e traçante (weapon_fx.tracer.standard) aparecem. O .cgf de
+-- 3ª pessoa não tem helper de cano, então o cano fica um pouco à frente da arma.
+function SodCoop.PuppetShot(shell)
+  local w = SodCoop.weaponEnt
+  if not (w and System.GetEntity(w.id)) or not SodCoop.PuppetAlive() then return "sem arma" end
+  local d = SodCoop.puppet:GetDirectionVector(1)
+  local p = w:GetWorldPos()
+  local muzzle = { x = p.x + d.x * 0.22, y = p.y + d.y * 0.22, z = p.z + 0.06 }
+  pcall(Particle.SpawnEffect, "weapon_fx.tracer.standard", muzzle, d, 1)
+  pcall(Particle.SpawnEffect, shell, p, { x = d.y, y = -d.x, z = 0.3 }, 1)
+  local l = SodCoop.flashEnt
+  if not (l and System.GetEntity(l.id)) then
+    l = System.SpawnEntity({ class = "BasicEntity", name = "sodcoop_puppet_flash", position = muzzle,
+                             properties = { object_Model = "", bPhysicalize = 0 } })
+    SodCoop.flashEnt = l
+  end
+  if l then
+    l:SetWorldPos(muzzle)
+    pcall(function()
+      l:FreeSlot(0)
+      l:LoadLight(0, { radius = 4, diffuse_color = { x = 1, y = 0.7, z = 0.3 }, diffuse_multiplier = 8,
+                       specular_multiplier = 1, cast_shadow = false, lightstyle = 0, hdrdyn = 0 })
+    end)
+    Script.SetTimer(70, function()
+      if SodCoop.flashEnt and System.GetEntity(SodCoop.flashEnt.id) then pcall(function() SodCoop.flashEnt:FreeSlot(0) end) end
+    end)
+  end
+  return "ok"
+end
+-- Arma na mão: uma entidade própria (BasicEntity com o .cgf) presa no osso weapon_bone
+-- por SetAttachmentObject. Desde que o fantoche é montado com esqueleto + partes
+-- (2026-11-02), um .cgf preso direto com SetAttachmentCGF não aparece (testado
+-- 2026-11-04 na cabeça e na mão, com pistola, espingarda e pé de cabra).
 function SodCoop.SetPuppetWeapon(path)
   if not SodCoop.PuppetAlive() then error("sodcoop: fantoche inexistente") end
   local e = SodCoop.puppet
   e:DestroyAttachment(0, "sodcoop_weapon")
+  SodCoop.RemovePuppetWeapon()
   if path ~= "" then
+    local p = e:GetWorldPos()
+    local w = System.SpawnEntity({ class = "BasicEntity", name = "sodcoop_puppet_weapon",
+                                   position = { x = p.x, y = p.y, z = p.z + 1 },
+                                   properties = { object_Model = path, bPhysicalize = 0 } })
+    if not w then error("sodcoop: entidade da arma nao criada: " .. path) end
+    SodCoop.weaponEnt = w
     e:CreateBoneAttachment(0, "weapon_bone", "sodcoop_weapon")
-    e:SetAttachmentCGF(0, "sodcoop_weapon", path)
-    if e:GetAttachmentCGF(0, "sodcoop_weapon") == nil then error("sodcoop: arma nao anexada: " .. path) end
+    e:SetAttachmentObject(0, "sodcoop_weapon", w.id, -1, 0)
   end
 end
 function SodCoop.MovePuppet(x, y, z, yaw, bone)

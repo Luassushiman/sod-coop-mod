@@ -143,6 +143,8 @@ Registro dos bindings em `FUN_00B8DA10`. Os handlers abaixo chamam os métodos d
 | `IStatObj::GetFilePath()` | vtbl `+0xA0` | VALIDADO-RUNTIME | bind `GetAttachmentCGF` `0x00B95020` (`GetCharacter(+0x144)` → `GetIAttachmentManager(+0x1C)` → `GetInterfaceByName(+0x18)` → `GetIAttachmentObject(+0x60)` → `GetIStatObj(+0x2C)` → `+0xA0`) |
 | Arma do jogador | entidade própria do item (`inventory:GetCurrentItem()`, ex. `Prybar025`), modelo de 3ª pessoa no **slot 1** (`objects/weapons/club/iron/club_prybar.cgf`); **não** é um `.cgf` preso no esqueleto (`GetAttachmentCGF` vazio em todos os pontos testados); punhos (`Fists`) = 0 slots | VALIDADO-RUNTIME | log `arma:` |
 | `Entity:CreateBoneAttachment(0, "weapon_bone", nome)` + `SetAttachmentCGF(0, nome, arquivo)` | prende o modelo na mão do fantoche na posição certa | VALIDADO-RUNTIME | confirmado pelo usuário |
+| `Entity:SetAttachmentObject(0, anexo, entityId, -1, 0)` com uma `BasicEntity` do `.cgf` | arma na mão do fantoche montado com esqueleto + partes (o `SetAttachmentCGF` acima deixou de aparecer nesse fantoche) | VALIDADO-RUNTIME | 2026-11-04, confirmado pelo usuário |
+| `item.weapon:GetAmmoCount()` (Lua) | munição no pente da arma atual; 0 nos punhos | VALIDADO-RUNTIME | 2026-11-04, cai 15→14→13 a cada tiro da M9 |
 
 ### Mira, tiro e recarga (2026-11-01)
 

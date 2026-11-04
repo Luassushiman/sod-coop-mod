@@ -188,6 +188,23 @@ bool isLongGunAimPose(const char* aimPose) {
     return false;
 }
 
+// Tiro no fantoche: luz no cano, traçante e cápsula (efeitos do próprio jogo, nomes lidos
+// da memória do host); a cápsula pelo modelo da arma.
+void muzzleFlash(const std::string& weapon) {
+    const char* shell = weapon.find("pistol") != std::string::npos || weapon.find("revolver") != std::string::npos
+                            ? "Class3_WeaponFX.shells.pistol_9mm"
+                        : weapon.find("shotgun") != std::string::npos ? "Class3_WeaponFX.shells.shotgun"
+                        : weapon.find("smg") != std::string::npos     ? "Class3_WeaponFX.shells.SMG"
+                        : weapon.find("rifle") != std::string::npos   ? "Class3_WeaponFX.shells.rifle"
+                                                                      : "Class3_WeaponFX.shells.assault";
+    char code[160];
+    snprintf(code, sizeof(code), "SodCoop.PuppetShot(\"%s\")", shell);
+    std::string result;
+    puppet::readLuaText(code, result);
+    static int logs = 0;
+    if (logs++ < 10) log::info("remote_player: tiro (luz, tracante, %s) -> %s", shell, result.c_str());
+}
+
 const char* gaitName(Gait g) {
     static const char* names[] = {"idle", "walk", "run", "sprint"};
     return g == Gait::None ? "none" : names[static_cast<int>(g)];
@@ -442,6 +459,7 @@ void update(const net::RemoteState& remote, bool localInWorld, const std::string
         const bool loop = lower.find("idle") != std::string::npos;
         log::info("remote_player: parte de cima %s (seq %u%s)", s.upper, s.upperSeq, loop ? ", loop" : "");
         g_upperOn = puppet::playAnimation(s.upper, 1.0f, loop, 0.15f, 2);
+        if (lower.compare(0, 9, "gun_shoot") == 0) muzzleFlash(g_weapon);
     } else if (!s.upper[0] && g_upperOn) {
         puppet::stopLayer(2);
         g_upperOn = false;
