@@ -1,4 +1,5 @@
-# Gera o pacote para jogar: compila e junta dinput8.dll + release\sodcoop.ini + release\LEIA-ME.md
+# Gera o pacote para jogar: compila e junta dinput8.dll + SoDCoop.exe + release\sodcoop.ini +
+# release\LEIA-ME.md (português) + release\README.md (inglês)
 # em build\release\sodcoop-<data>.zip. Não toca em nenhuma instalação do jogo.
 # Uso: .\package.ps1
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,7 @@ Copy-Item "$root\build\dinput8.dll" $stage
 Copy-Item "$root\build\SoDCoop.exe" $stage
 Copy-Item "$root\release\sodcoop.ini" $stage
 Copy-Item "$root\release\LEIA-ME.md" $stage
+Copy-Item "$root\release\README.md" $stage
 $zip = "$root\build\release\sodcoop-$(Get-Date -Format yyyyMMdd).zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip

@@ -1,0 +1,79 @@
+# State of Decay: Year-One — Co-op Mod (prototype)
+
+Co-op for **two players** in the **Breakdown** mode of State of Decay: Year-One Survival Edition (Steam, version **845221**).
+
+> ⚠️ This is a prototype. **Back up your saves** before using it: the `USER` folder inside the game folder, including the `UserStats*.cfg` files.
+
+## What's in the package
+
+| File | What it does |
+|---|---|
+| `dinput8.dll` | The mod. The game loads it automatically when it is in the game folder. |
+| `SoDCoop.exe` | A window to set up co-op and launch the game, so you don't have to edit the `.ini`. |
+| `sodcoop.ini` | Settings: who is the host, who is the client, IP and port. The window saves here. |
+
+## Installation (on both PCs)
+
+1. Open the game folder, the one with `StateOfDecay.exe`. It is usually `C:\Program Files (x86)\Steam\steamapps\common\State of Decay YOSE`.
+2. Copy `dinput8.dll`, `SoDCoop.exe` and `sodcoop.ini` into it.
+3. Open **SoDCoop.exe** and choose the options below. The window is in Portuguese, so the English meaning is in brackets.
+   - **Criar a partida** [create the game] for the host, or **Entrar na partida do amigo** [join your friend's game] for the client;
+   - **Pela Steam** [through Steam], the recommended option, or **Por IP direto** [direct IP];
+   - with Steam, your **friend's SteamID64** goes in **SteamID64 do amigo**. Yours is shown in the same window (**Seu SteamID64**), with a **Copiar** [copy] button so you can send it to your friend;
+   - with direct IP, the host can click **Testar porta (UPnP)** [test port], and the mod tries to open the port on the router by itself. The window shows the IP to give your friend, or warns you if your connection uses CGNAT, in which case only Steam works.
+
+   Then click **Salvar e jogar** [save and play]. If the game folder is under "Program Files" and the window can't save, run SoDCoop.exe as administrator.
+
+   Optional background: put an image named `SoDCoop_fundo.jpg` or `.png` next to `SoDCoop.exe`, and it becomes the window background.
+
+   If you prefer to edit `sodcoop.ini` by hand:
+   - **Host**, who creates the game, uses `role=host`. **Client**, who joins, uses `role=client`.
+   - **Through Steam**, recommended: keep `transport=steam` and put the **other player's SteamID64** in `steam_peer=`. It is a 17-digit number that starts with 7656119. To find yours, start the game once with the mod and look in the log for the line `seu SteamID64 = ...` [your SteamID64], or paste your profile link into a site such as steamid.io.
+   - **Direct IP**: use `transport=udp`. The host uses `bind=0.0.0.0`, and the client puts the host's IP in `host=`.
+
+To remove the mod, delete `dinput8.dll`, `SoDCoop.exe` and `sodcoop.ini`. The game goes back to normal, and no original file is changed.
+
+## Before playing: the same world on both PCs
+
+The client must load **the host's save**:
+
+1. On the host's PC, take the `Sandbox*.ulsave` and `UserStats*.cfg` files from the `USER\<number>\` folder.
+2. On the client's PC, back up the client's own files, then copy the host's files into the same folder, `USER\<number>\`.
+3. Repeat this whenever the host plays alone, because the host's save changes.
+
+## How to play
+
+1. The **host** starts the game and enters Breakdown with **Continue**.
+2. Once the host is in the world, the **client** starts the game and enters with **Continue**. The client appears next to the host.
+3. The connection is automatic. The mod's log (`sodcoop_default.log`, in the game folder) shows `conectado=1` [connected].
+
+### Over the internet
+
+With `transport=steam`, **you don't need to open any port**: Steam connects the two PCs. Both players just need to be logged in to Steam, and each one needs the other's SteamID64 in `sodcoop.ini`.
+
+With `transport=udp`, the connection is direct:
+
+- When the host plays over IP, the mod tries to open **UDP port 27650** on the router by itself, using UPnP. If the router refuses, the **host** opens the port manually (port forwarding) and gives their **public IP** to the client.
+- Another option is a virtual network program such as Radmin VPN, ZeroTier or Tailscale. The client then uses the IP the program shows for the host.
+
+## What works
+
+- Both survivors see each other: movement, melee, weapons, aiming, shooting and reloading.
+- The host's zombies appear for the client, and they chase and attack both players. The client's melee, shots, grenades and Molotovs hurt and kill the zombies.
+- The client doesn't really die: they go down and come back next to the host.
+- Cars: driving, riding as a passenger and spinning wheels.
+- Base: supply locker, resources and facilities (build, finish, upgrade, demolish) are the same on both PCs.
+- Time of day, already-searched places and items given to the other player.
+- **2560×1440** in the options menu, at 16:9.
+
+## Known limitations
+
+- Facility actions (crafting, cooking, training) only run for the player who started them.
+- The community (morale, injuries, survivors) is simulated separately on each PC.
+- If the host dies, the game's normal rules apply to the host's save.
+- It only works with version **845221** of the game on Steam. With any other version, the mod turns itself off and writes the reason in the log.
+
+---
+
+© 2026 Luassushiman. All rights reserved.
+*State of Decay* is a registered trademark of Microsoft / Undead Labs. This is a fan project, not affiliated with Microsoft or Undead Labs. You need the original game.
