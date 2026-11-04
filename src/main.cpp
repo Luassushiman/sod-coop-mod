@@ -230,21 +230,29 @@ void patchMenuResolutions(DWORD now) {
     // Texto traduzido: "3840 x 2160" (com espaços; o nome interno "Resolution 3840x2160",
     // sem espaços, fica como está). Só memória privada de leitura e escrita (heap).
     static const char kOld[] = "3840 x 2160", kNew[] = "2560 x 1440";
+    // Leitura e escrita por ReadProcessMemory/WriteProcessMemory: se outra thread do jogo
+    // liberar a memória no meio, a chamada só falha (ler direto derrubaria o jogo).
     int replaced = 0;
     MEMORY_BASIC_INFORMATION mbi;
+    static char chunk[1 << 20];
+    const size_t len = sizeof(kOld) - 1;
+    HANDLE self = GetCurrentProcess();
     for (uintptr_t a = 0x10000; a < 0x7FFF0000 && VirtualQuery(reinterpret_cast<void*>(a), &mbi, sizeof(mbi));
          a = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize) {
-        if (mbi.State != MEM_COMMIT || mbi.Type != MEM_PRIVATE || !(mbi.Protect & (PAGE_READWRITE)) ||
-            (mbi.Protect & PAGE_GUARD))
-            continue;
-        char* base = static_cast<char*>(mbi.BaseAddress);
-        const size_t size = mbi.RegionSize;
-        for (size_t k = 0; k + sizeof(kOld) - 1 <= size; ++k) {
-            if (base[k] != '3') continue;
-            if (memcmp(base + k, kOld, sizeof(kOld) - 1) == 0) {
-                memcpy(base + k, kNew, sizeof(kNew) - 1);
-                ++replaced;
+        if (mbi.State != MEM_COMMIT || mbi.Type != MEM_PRIVATE || mbi.Protect != PAGE_READWRITE) continue;
+        const uintptr_t base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+        for (size_t off = 0; off < mbi.RegionSize; off += sizeof(chunk) - len) {
+            const size_t n = mbi.RegionSize - off < sizeof(chunk) ? mbi.RegionSize - off : sizeof(chunk);
+            SIZE_T got = 0;
+            if (n < len || !ReadProcessMemory(self, reinterpret_cast<void*>(base + off), chunk, n, &got) || got != n)
+                break;
+            for (size_t k = 0; k + len <= n; ++k) {
+                SIZE_T done = 0;
+                if (chunk[k] == '3' && memcmp(chunk + k, kOld, len) == 0 &&
+                    WriteProcessMemory(self, reinterpret_cast<void*>(base + off + k), kNew, len, &done) && done == len)
+                    ++replaced;
             }
+            if (n < sizeof(chunk)) break;
         }
     }
     if (replaced) {

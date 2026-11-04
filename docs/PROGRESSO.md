@@ -381,6 +381,13 @@ Pendências:
 - O client não mira mais em zumbis mortos (golpes iam para corpos).
 - **Pendência:** o golpe do client ainda parece "seco": o fantoche não tem física, então a arma o atravessa e o jogo não toca o impacto dele (parada da arma, sangue, som). Os nomes dos efeitos ficam nos `.pak` (protegidos). Próximo passo: testar dar um corpo físico ao fantoche para a arma bater nele.
 
+## Estabilidade (2026-11-04)
+
+- **Evidência das quedas:** o `crash_log` agora registra a corrupção de heap (`0xC0000374`, na 1ª chance; antes o jogo fechava sem nada no log) e grava um minidump (`sodcoop_<data>_<hora>_<código>.dmp`, ao lado do exe, com as pilhas das threads e a memória apontada por elas) nela e em qualquer fechamento por exceção, no máximo 2 por execução.
+- **Arma do fantoche:** `RemovePuppetWeapon` apagava a entidade da arma ainda presa (`SetAttachmentObject`) na mão do fantoche, que ficava apontando para uma entidade apagada até sumir. Suspeita da corrupção de heap do host às 06:11:03, 9 s depois de o client trocar para a wakizashi. Agora solta a arma (`DestroyAttachment`) antes de apagar.
+- **Busca do texto do menu de resolução:** lia o heap direto; passou a usar `ReadProcessMemory`/`WriteProcessMemory` no próprio processo (falham em vez de derrubar o jogo se outra thread liberar a memória).
+- Teste: rodada com o client trocando de arma (14 trocas vistas pelo host), golpes, tiros e granada: nenhuma queda, exceção ou corrupção nos logs. A corrupção de heap original não tem causa provada; se voltar, o dump vai mostrar onde.
+
 ## Resolução 2560×1440 no menu (2026-11-04) ✅
 
 - O menu de opções do jogo (`FUN_015c4700`, casos `0xF`/`0x10`) não pergunta ao Windows as resoluções: tem três tabelas fixas de 5 larguras e 5 alturas por formato, em `0x01898E34` (4:3), `0x01898E5C` (16:9) e `0x01898E84` (16:10). A de 16:9 é 1280×720, 1366×768, 1600×900, 1920×1080, **3840×2160**: depois de 1080p vem 4K (o "3000 e pouco" que o menu escolhia) e não há 2560×1440.

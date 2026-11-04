@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <dbghelp.h>
 #include <MinHook.h>
 
 #include <cstdio>
@@ -41,9 +42,40 @@ void logException(const char* what, EXCEPTION_POINTERS* ep) {
     log::error("%s: pilha (enderecos do exe):%s", what, found ? buf : " nenhum");
 }
 
+// Minidump (pilhas de todas as threads e a memória que elas apontam) ao lado do exe:
+// sodcoop_<data>_<hora>_<código>.dmp. No máximo 2 por execução. O dbghelp é carregado só
+// na hora. Para abrir: WinDbg ou Visual Studio, com o exe desempacotado para os símbolos.
+volatile LONG g_dumps = 0;
+void writeDump(EXCEPTION_POINTERS* ep) {
+    if (InterlockedIncrement(&g_dumps) > 2) return;
+    using Write_t = BOOL(WINAPI*)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION,
+                                  PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+    HMODULE dbg = LoadLibraryW(L"dbghelp.dll");
+    auto write = dbg ? reinterpret_cast<Write_t>(GetProcAddress(dbg, "MiniDumpWriteDump")) : nullptr;
+    if (!write) return;
+    wchar_t path[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    while (n > 0 && path[n - 1] != L'\\') --n;
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    swprintf(path + n, MAX_PATH - n, L"sodcoop_%04d%02d%02d_%02d%02d%02d_%08lX.dmp", t.wYear, t.wMonth, t.wDay,
+             t.wHour, t.wMinute, t.wSecond, ep->ExceptionRecord->ExceptionCode);
+    HANDLE f = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return;
+    MINIDUMP_EXCEPTION_INFORMATION info = {GetCurrentThreadId(), ep, FALSE};
+    const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), f,
+                          static_cast<MINIDUMP_TYPE>(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo |
+                                                     MiniDumpScanMemory),
+                          &info, nullptr, nullptr);
+    CloseHandle(f);
+    log::error("crash_log: dump %s: %ls", ok ? "gravado" : "FALHOU", path + n);
+}
+
 LONG WINAPI filter(EXCEPTION_POINTERS* ep) {
-    if (InterlockedExchange(&g_inside, 1) == 0 && ep && ep->ExceptionRecord && ep->ContextRecord)
+    if (InterlockedExchange(&g_inside, 1) == 0 && ep && ep->ExceptionRecord && ep->ContextRecord) {
         logException("FECHAMENTO", ep);
+        writeDump(ep);
+    }
     return g_previous ? g_previous(ep) : EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -60,6 +92,10 @@ LONG CALLBACK firstChance(EXCEPTION_POINTERS* ep) {
         case EXCEPTION_PRIV_INSTRUCTION:
         case 0xC0000409:  // STATUS_STACK_BUFFER_OVERRUN (__fastfail)
             if (InterlockedIncrement(&g_firstChance) <= 20) logException("EXCECAO (1a chance)", ep);
+            break;
+        case 0xC0000374:  // STATUS_HEAP_CORRUPTION: o Windows fecha o jogo logo depois
+            logException("CORRUPCAO DE HEAP", ep);
+            writeDump(ep);
             break;
         default:
             break;

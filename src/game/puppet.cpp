@@ -77,6 +77,9 @@ function SodCoop.SeatPuppet(x, y, z, yaw)
   end
 end
 function SodCoop.RemovePuppetWeapon()
+  -- Solta a arma da mão antes de apagar a entidade dela: o anexo ficava apontando para uma
+  -- entidade apagada até o fantoche sumir (possível corrupção de memória, 2026-11-04).
+  if SodCoop.PuppetAlive() then SodCoop.puppet:DestroyAttachment(0, "sodcoop_weapon") end
   local w = SodCoop.weaponEnt
   if w and System.GetEntity(w.id) then System.RemoveEntity(w.id) end
   SodCoop.weaponEnt = nil
