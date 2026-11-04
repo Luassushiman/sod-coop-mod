@@ -1,0 +1,3 @@
+r_Width
+r_Height
+Current display mode is %dx%dx%d, %s

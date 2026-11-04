@@ -1,0 +1,4 @@
+r_Fullscreen
+r_VSync
+%dx%d
+%d x %d

@@ -12,8 +12,10 @@
 
 #include <cctype>
 #include <cmath>
+#include <algorithm>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "core/build_check.h"
 #include "core/clock.h"
@@ -193,6 +195,64 @@ uint16_t localPistolShots(bool inWorld, DWORD now) {
     lastItem = item;
     lastAmmo = ammo;
     return shots;
+}
+
+// Resoluções do menu de opções do jogo (FUN_015c4700, casos 0xF/0x10): três tabelas fixas
+// de 5 larguras e 5 alturas por formato (0 = 4:3, 1 = 16:9, 2 = 16:10). A de 16:9 é
+// 1280x720, 1366x768, 1600x900, 1920x1080, 3840x2160: pula de 1080p para 4K e não tem
+// 2560x1440. O rótulo de cada opção é um texto traduzido à parte ("Resolution 3840x2160",
+// em português "Resolução 3840 x 2160", no heap). A última opção de 16:9 vira 2560x1440:
+// o número na tabela (na memória; o arquivo do jogo não muda) e o texto traduzido, que tem
+// o mesmo tamanho. A tabela muda uma vez; o texto é procurado até ser achado.
+void patchMenuResolutions(DWORD now) {
+    static bool tableDone = false, textDone = false;
+    static DWORD nextText = 0;
+    static int textTries = 0;
+    if (!tableDone) {
+        tableDone = true;
+        int* widths = reinterpret_cast<int*>(0x01898E5C);
+        int* heights = reinterpret_cast<int*>(0x01898E70);
+        DWORD old = 0;
+        if (engine::isReadable(widths, 20) && engine::isReadable(heights, 20) && widths[4] == 3840 &&
+            heights[4] == 2160 && VirtualProtect(widths, 0x28, PAGE_READWRITE, &old)) {
+            widths[4] = 2560;
+            heights[4] = 1440;
+            VirtualProtect(widths, 0x28, old, &old);
+            log::info("video: opcao 16:9 do menu 3840x2160 -> 2560x1440 (numeros)");
+        } else {
+            log::warn("video: tabela 16:9 do menu diferente da esperada; nao mexe");
+            textDone = true;
+        }
+    }
+    if (textDone || now < nextText || textTries >= 12) return;
+    nextText = now + 5000;
+    ++textTries;
+    // Texto traduzido: "3840 x 2160" (com espaços; o nome interno "Resolution 3840x2160",
+    // sem espaços, fica como está). Só memória privada de leitura e escrita (heap).
+    static const char kOld[] = "3840 x 2160", kNew[] = "2560 x 1440";
+    int replaced = 0;
+    MEMORY_BASIC_INFORMATION mbi;
+    for (uintptr_t a = 0x10000; a < 0x7FFF0000 && VirtualQuery(reinterpret_cast<void*>(a), &mbi, sizeof(mbi));
+         a = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize) {
+        if (mbi.State != MEM_COMMIT || mbi.Type != MEM_PRIVATE || !(mbi.Protect & (PAGE_READWRITE)) ||
+            (mbi.Protect & PAGE_GUARD))
+            continue;
+        char* base = static_cast<char*>(mbi.BaseAddress);
+        const size_t size = mbi.RegionSize;
+        for (size_t k = 0; k + sizeof(kOld) - 1 <= size; ++k) {
+            if (base[k] != '3') continue;
+            if (memcmp(base + k, kOld, sizeof(kOld) - 1) == 0) {
+                memcpy(base + k, kNew, sizeof(kNew) - 1);
+                ++replaced;
+            }
+        }
+    }
+    if (replaced) {
+        log::info("video: texto da opcao 16:9 \"3840 x 2160\" -> \"2560 x 1440\" (%d lugar(es))", replaced);
+        textDone = true;
+    } else if (textTries >= 12) {
+        log::warn("video: texto \"3840 x 2160\" do menu nao achado");
+    }
 }
 
 // Ferramenta de teste: se existir sodcoop_cmd.lua ao lado do exe, executa uma vez
@@ -466,6 +526,7 @@ void onFrame() {
         log::info("cvars: sys_MaxFPS=%d -> %s", g_cfg.maxFps, ok ? "OK" : "FALHOU");
         fpsApplied = true;
     }
+    patchMenuResolutions(now);
     static bool videoApplied = false;
     if (!videoApplied && g_cfg.window.enabled()) {
         // Resolução do jogo = área interna da janela fixa (borda do Windows: 16 x 39 px).
@@ -479,16 +540,38 @@ void onFrame() {
         log::info("cvars: r_Fullscreen=0 r_Width=%d r_Height=%d -> %s", g_cfg.window.width - 16,
                   g_cfg.window.height - 39, ok ? "OK" : "FALHOU");
         videoApplied = true;
-    } else if (!videoApplied && g_cfg.videoWidth > 0 && g_cfg.videoHeight > 0) {
+    } else if (!g_cfg.window.enabled() && g_cfg.videoWidth > 0 && g_cfg.videoHeight > 0) {
         // [video]: resolução escolhida pelo jogador, inclusive as que o menu do jogo não lista.
-        char code[160];
-        int n = snprintf(code, sizeof(code), "System.SetCVar(\"r_Width\", %d); System.SetCVar(\"r_Height\", %d)",
-                         g_cfg.videoWidth, g_cfg.videoHeight);
-        if (g_cfg.videoFullscreen >= 0)
-            snprintf(code + n, sizeof(code) - n, "; System.SetCVar(\"r_Fullscreen\", %d)", g_cfg.videoFullscreen ? 1 : 0);
-        bool ok = engine::executeLua(code, "sodcoop_video");
-        log::info("cvars: [video] r_Width=%d r_Height=%d r_Fullscreen=%d -> %s", g_cfg.videoWidth, g_cfg.videoHeight,
-                  g_cfg.videoFullscreen, ok ? "OK" : "FALHOU");
+        // O jogo reaplica a resolução salva depois (no mundo voltou a 1920x1080, 2026-11-03):
+        // a cada 1 s confere os cvars e reaplica se mudaram (no máximo 30 vezes).
+        static DWORD nextCheck = 0;
+        static int applied = 0;
+        if (now >= nextCheck && applied < 30) {
+            nextCheck = now + 1000;
+            std::string cur;
+            puppet::readLuaText(
+                "tostring(System.GetCVar(\"r_Width\")) .. 'x' .. tostring(System.GetCVar(\"r_Height\")) .. 'f' .. "
+                "tostring(System.GetCVar(\"r_Fullscreen\"))",
+                cur);
+            char want[64];
+            snprintf(want, sizeof(want), "%dx%df%d", g_cfg.videoWidth, g_cfg.videoHeight,
+                     g_cfg.videoFullscreen >= 0 ? (g_cfg.videoFullscreen ? 1 : 0) : -1);
+            const bool fsOk = g_cfg.videoFullscreen < 0 || (cur.size() >= 1 && cur.back() == want[strlen(want) - 1]);
+            const std::string curSize = cur.substr(0, cur.find('f'));
+            const std::string wantSize = std::string(want).substr(0, std::string(want).find('f'));
+            if (curSize != wantSize || !fsOk) {
+                char code[160];
+                int n = snprintf(code, sizeof(code), "System.SetCVar(\"r_Width\", %d); System.SetCVar(\"r_Height\", %d)",
+                                 g_cfg.videoWidth, g_cfg.videoHeight);
+                if (g_cfg.videoFullscreen >= 0)
+                    snprintf(code + n, sizeof(code) - n, "; System.SetCVar(\"r_Fullscreen\", %d)",
+                             g_cfg.videoFullscreen ? 1 : 0);
+                bool ok = engine::executeLua(code, "sodcoop_video");
+                ++applied;
+                log::info("cvars: [video] estava %s; aplicando %s (%d) -> %s", cur.c_str(), want, applied,
+                          ok ? "OK" : "FALHOU");
+            }
+        }
         videoApplied = true;
     }
     engine::EntityId id = local_player::currentId();

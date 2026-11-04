@@ -381,6 +381,14 @@ Pendências:
 - O client não mira mais em zumbis mortos (golpes iam para corpos).
 - **Pendência:** o golpe do client ainda parece "seco": o fantoche não tem física, então a arma o atravessa e o jogo não toca o impacto dele (parada da arma, sangue, som). Os nomes dos efeitos ficam nos `.pak` (protegidos). Próximo passo: testar dar um corpo físico ao fantoche para a arma bater nele.
 
+## Resolução 2560×1440 no menu (2026-11-04) ✅
+
+- O menu de opções do jogo (`FUN_015c4700`, casos `0xF`/`0x10`) não pergunta ao Windows as resoluções: tem três tabelas fixas de 5 larguras e 5 alturas por formato, em `0x01898E34` (4:3), `0x01898E5C` (16:9) e `0x01898E84` (16:10). A de 16:9 é 1280×720, 1366×768, 1600×900, 1920×1080, **3840×2160**: depois de 1080p vem 4K (o "3000 e pouco" que o menu escolhia) e não há 2560×1440.
+- O rótulo de cada opção é um texto traduzido à parte, registrado em `FUN_014a60e0` ("Resolution 3840x2160" → em português "Resolução 3840 x 2160", no heap). Trocar só os números deixava o texto antigo e a opção nova não aparecia.
+- O mod (`patchMenuResolutions`, `src/main.cpp`) troca na memória, ao iniciar, a última opção de 16:9: os números (3840×2160 → 2560×1440) e o texto traduzido ("3840 x 2160" → "2560 x 1440", mesmo tamanho; procurado no heap a cada 5 s até achar). O arquivo do jogo não muda. Testado: aparece no menu em 16:9 e funcionou ("Funcionou").
+- Primeira tentativa errada, desfeita: o vetor de resoluções do sistema de UI do CryAction (`FUN_0167f810`, objeto em `*(*(0x01E8EF58)+0x0C)`) fica vazio neste jogo; o menu não o usa.
+- `[video] width/height/fullscreen` continua existindo (força a resolução e reaplica se o jogo trocar), mas com o menu não é mais necessária.
+
 ## Resolução fora da lista do jogo (2026-11-03, em pausa)
 
 - Pedido do usuário: jogar em 2560×1440 (monitor 2560×1440, 180 Hz); o menu do Year-One não lista essa resolução e não achamos mod pronto.
