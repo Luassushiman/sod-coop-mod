@@ -132,6 +132,18 @@ struct ContainerState {
 void sendContainers(const std::vector<ContainerState>& list);
 std::vector<ContainerState> takeContainers();
 
+// Armário da base (ver LockerPacket): vagas que mudaram, ou todas (host, a cada 5 s).
+struct LockerSlot {
+    uint16_t slot = 0;
+    uint32_t id = 0;
+    uint8_t data[6] = {};
+};
+void sendLocker(const std::vector<LockerSlot>& slots);
+std::vector<LockerSlot> takeLocker();
+// Recursos do estoque da base (5 valores). takeResources: o último recebido (false = nenhum novo).
+void sendResources(const float values[5]);
+bool takeResources(float values[5]);
+
 // Aparência de um zumbi do host ("base=esqueleto.chr;anexo=arquivo.chr|material;...").
 struct ZombieLook {
     uint32_t id = 0;    // EntityId no host

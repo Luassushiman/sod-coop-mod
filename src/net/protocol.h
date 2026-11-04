@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 23;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook
+inline constexpr uint16_t kProtocolVersion = 24;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook; v24: pacotes Locker e Resources
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -25,6 +25,8 @@ enum class PacketType : uint8_t {
     Container = 10, // ambos: o que sobrou num lugar vasculhado (ao mudar e a cada 2 s)
     Give = 11,    // ambos: item dado ao outro jogador (enviado 3x)
     ZombieLook = 12, // host -> cliente: partes de um zumbi (ao aparecer e a cada 3 s)
+    Locker = 13,  // ambos: vagas do armário da base que mudaram (3x); host: todas a cada 5 s
+    Resources = 14, // ambos: os 5 recursos do estoque da base (ao mudar, 3x; host a cada 5 s)
 };
 
 #pragma pack(push, 1)
@@ -135,6 +137,22 @@ struct LookPacket {
     uint16_t lookSeq;       // muda quando a aparência muda
     char parts[kLookSize];  // "anexo=arquivo.chr|material;..." (partes de pele do slot 0)
 };
+inline constexpr int kLockerPerPacket = 100;
+struct LockerEntry {
+    uint16_t slot;    // vaga do armário (0..255; igual nas duas cópias, com o mesmo save)
+    uint32_t id;      // item (tipo << 28 | índice); 0 = vaga vazia
+    uint8_t data[6];  // dados da vaga (quantidade, ou durabilidade/munição)
+};
+struct LockerPacket {
+    Header h;
+    uint8_t count;    // entradas válidas
+    LockerEntry e[kLockerPerPacket];
+};
+inline constexpr int kBaseResources = 5;
+struct ResourcesPacket {
+    Header h;
+    float values[kBaseResources];  // na ordem do jogo (resource data tipo 9, entradas 0 a 4)
+};
 struct ZombieLookPacket {
     Header h;
     uint32_t zombieId;      // ZombieEntry.id
@@ -146,6 +164,7 @@ struct ZombieLookPacket {
 inline constexpr int kMaxPacketSize = 1400;
 static_assert(sizeof(ZombiesPacket) <= kMaxPacketSize, "pacote de zumbis maior que o buffer");
 static_assert(sizeof(LookPacket) <= kMaxPacketSize, "pacote de aparencia maior que o buffer");
+static_assert(sizeof(LockerPacket) <= kMaxPacketSize, "pacote do armario maior que o buffer");
 static_assert(sizeof(ZombieLookPacket) <= kMaxPacketSize, "pacote de aparencia de zumbi maior que o buffer");
 
 }  // namespace sodcoop::net

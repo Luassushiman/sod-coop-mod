@@ -223,6 +223,8 @@ Os lugares de vasculhar (armários, gavetas...) quase nunca são entidades (`UL_
 | Mochila do sobrevivente atual | `*( *(0x01E658C8) + 0xE8 )` (registro do membro atual) | VALIDADO-RUNTIME | é a que a tela mostra |
 | Outra cópia | `*(0x01E658F0)`: mesma mochila, mas mexer nela **não** muda a tela | VALIDADO-RUNTIME | 1º teste: logs ok, mochila igual |
 | Por item na mochila (console) | `com_addConsumable`/`com_addWeapon` (`0x013DFF70`/`0x013E0790`) -> `0x015A89C0`(inventário, id, qtd, 1.0) no personagem 0 da tabela `0x01E4BC30` (0x270 cada, mochila em `+0x244`; 256 vagas = estoque da comunidade) | CONFIRMADO-ESTÁTICO | descompilação |
+| Armário de suprimentos | `*(0x01E4BC30 + 0x244)` = `NSInventory::Inventory` de 256 vagas (vtable `0x0189AE98`) | VALIDADO-RUNTIME (2026-11-04) | mesmo conteúdo nas duas cópias; sincronizado |
+| Locais de base | entidades da classe `HomeSite` (`Properties.esHomeId`, `esHomeSize`, `bStarterHome`, `bHaven`); tomar: `NSHome::Home::ClaimHome` / aviso "Claim Home Site?" | VALIDADO-RUNTIME (lista) | 17 no Breakdown |
 | Estoque da base | "resource data" tipo 9 (`Stockpile.Ammo/Food/Materials/Medicine/Fuel`, símbolos `0x9000001...`); grupos em `*(0x01E1FBF4)`, valores em `+0xC` (0x14 bytes cada, valor em `+8`) codificados: troca de bits + XOR com `*(0x01E1FDAC) ^ *(0x01E1FB54)` (`0x01394740` lê, `0x013A3C30` grava); `0x01394D30` soma respeitando o limite `0x0190D7F0` | VALIDADO-RUNTIME (leitura) | 0 nas duas cópias sem base |
 
 ## 5. Pendências para o marco "dois jogadores no mesmo mundo"

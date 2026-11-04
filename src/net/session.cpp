@@ -53,6 +53,11 @@ uint16_t g_localLookSeq = 0;
 std::string g_remoteLook;   // protegido por g_lock
 uint16_t g_remoteLookSeq = 0;
 constexpr double kLookSendInterval = 2.0;  // s
+std::vector<LockerSlot> g_outLocker;   // protegido por g_lock
+std::vector<LockerSlot> g_inLocker;    // protegido por g_lock
+std::vector<std::vector<float>> g_outResources;  // cada envio vai 3x; protegido por g_lock
+float g_inResources[kBaseResources] = {};
+bool g_haveInResources = false;        // protegido por g_lock
 std::vector<ZombieLook> g_outZombieLooks;           // host; protegido por g_lock
 std::map<uint32_t, ZombieLook> g_zombieLooks;       // cliente: id -> aparência; protegido por g_lock
 constexpr size_t kMaxZombieLooks = 512;
@@ -335,6 +340,57 @@ void handleLook(const char* data) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void sendBasePackets() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<LockerSlot> locker;
+    locker.swap(g_outLocker);
+    std::vector<std::vector<float>> res;
+    res.swap(g_outResources);
+    ReleaseSRWLockExclusive(&g_lock);
+    for (size_t i = 0; i < locker.size();) {
+        LockerPacket p = {};
+        fillHeader(p.h, PacketType::Locker);
+        for (; i < locker.size() && p.count < kLockerPerPacket; ++i, ++p.count) {
+            LockerEntry& e = p.e[p.count];
+            e.slot = locker[i].slot;
+            e.id = locker[i].id;
+            memcpy(e.data, locker[i].data, sizeof(e.data));
+        }
+        send(&p, static_cast<int>(offsetof(LockerPacket, e) + p.count * sizeof(LockerEntry)));
+    }
+    for (const std::vector<float>& v : res) {
+        ResourcesPacket p = {};
+        fillHeader(p.h, PacketType::Resources);
+        for (int k = 0; k < kBaseResources && k < (int)v.size(); ++k) p.values[k] = v[k];
+        send(&p, sizeof(p));
+    }
+}
+
+void handleLocker(const char* data, int size) {
+    LockerPacket p = {};
+    memcpy(&p, data, size < (int)sizeof(p) ? size : sizeof(p));
+    const int fits = (size - (int)offsetof(LockerPacket, e)) / (int)sizeof(LockerEntry);
+    const int count = p.count < fits ? p.count : fits;
+    AcquireSRWLockExclusive(&g_lock);
+    for (int i = 0; i < count && i < kLockerPerPacket && g_inLocker.size() < 2048; ++i) {
+        LockerSlot s;
+        s.slot = p.e[i].slot;
+        s.id = p.e[i].id;
+        memcpy(s.data, p.e[i].data, sizeof(s.data));
+        g_inLocker.push_back(s);
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+void handleResources(const char* data) {
+    ResourcesPacket p;
+    memcpy(&p, data, sizeof(p));
+    AcquireSRWLockExclusive(&g_lock);
+    memcpy(g_inResources, p.values, sizeof(g_inResources));
+    g_haveInResources = true;
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 void sendZombieLookPackets() {
     AcquireSRWLockExclusive(&g_lock);
     std::vector<ZombieLook> out;
@@ -374,6 +430,8 @@ void setConnected(bool connected, uint32_t peerId) {
         g_remote.state = PlayerState{};
         g_remoteZombies.clear();
         g_zombieLooks.clear();
+        g_inLocker.clear();
+        g_haveInResources = false;
         g_haveHitSeq = false;  // o outro lado recomeça a sequência ao reabrir
         g_remoteLook.clear();
         g_remoteLookSeq = 0;
@@ -463,6 +521,14 @@ void handlePacket(const char* data, int size, const Address& from) {
     if (h.type == PacketType::ZombieLook && g_cfg.role == Role::Client &&
         size > (int)offsetof(ZombieLookPacket, parts)) {
         handleZombieLook(data, size);
+        return;
+    }
+    if (h.type == PacketType::Locker && size > (int)offsetof(LockerPacket, e)) {
+        handleLocker(data, size);
+        return;
+    }
+    if (h.type == PacketType::Resources && size >= (int)sizeof(ResourcesPacket)) {
+        handleResources(data);
         return;
     }
     if (h.type == PacketType::Give && size >= (int)sizeof(GivePacket)) {
@@ -558,6 +624,7 @@ DWORD WINAPI netThread(LPVOID) {
         if (g_peerKnown) sendContainerPackets();
         if (g_peerKnown) sendGives();
         if (g_peerKnown && g_cfg.role == Role::Host) sendZombieLookPackets();
+        if (g_peerKnown) sendBasePackets();
         static double nextSearched = 0;
         if (g_peerKnown && nowSec >= nextSearched) {
             sendSearched();
@@ -715,6 +782,36 @@ uint16_t getRemoteSearched(std::vector<uint8_t>& bits) {
     const uint16_t n = g_remoteSearchedCount;
     ReleaseSRWLockShared(&g_lock);
     return n;
+}
+
+void sendLocker(const std::vector<LockerSlot>& slots) {
+    AcquireSRWLockExclusive(&g_lock);
+    for (const LockerSlot& s : slots)
+        if (g_outLocker.size() < 2048) g_outLocker.push_back(s);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+std::vector<LockerSlot> takeLocker() {
+    AcquireSRWLockExclusive(&g_lock);
+    std::vector<LockerSlot> in;
+    in.swap(g_inLocker);
+    ReleaseSRWLockExclusive(&g_lock);
+    return in;
+}
+
+void sendResources(const float values[5]) {
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_outResources.size() < 16) g_outResources.emplace_back(values, values + kBaseResources);
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+bool takeResources(float values[5]) {
+    AcquireSRWLockExclusive(&g_lock);
+    const bool have = g_haveInResources;
+    if (have) memcpy(values, g_inResources, sizeof(g_inResources));
+    g_haveInResources = false;
+    ReleaseSRWLockExclusive(&g_lock);
+    return have;
 }
 
 void sendZombieLooks(const std::vector<ZombieLook>& looks) {
