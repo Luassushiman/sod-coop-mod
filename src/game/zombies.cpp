@@ -268,6 +268,10 @@ function SodCoop.ZHitFeedback(id, melee)
     end
     pcall(Particle.SpawnEffect, melee and SodCoop.zHitFx.melee or SodCoop.zHitFx.shot, pos, dir, 1)
     if melee then pcall(Sound.Play, SodCoop.zHitSound, pos, 0, 0) end
+    -- Recuo na hora (o golpe "seco" de antes): empurra o fantoche na direção do golpe; o
+    -- ZPlace soma esse deslocamento à posição do host e o reduz a cada frame (~0,3 s).
+    local push = melee and 0.35 or 0.15
+    SodCoop.zKick[id] = { x = dir.x * push, y = dir.y * push }
   end
   if melee and a and a.actor and a.actor.CameraShake then
     pcall(a.actor.CameraShake, a.actor, 0.7, 0.2, 0.1, a:GetWorldPos())
@@ -398,7 +402,14 @@ function SodCoop.ZAnim(id, name, loop)
 end
 -- d = { id, x, y, z, yaw, id, x, ... }. Compensa o deslocamento de raiz pelo osso
 -- bone (como o fantoche do jogador). Entidades que sumiram são ignoradas.
-function SodCoop.ZPlace(e, x, y, z, yaw, bone)
+SodCoop.zKick = SodCoop.zKick or {}
+function SodCoop.ZPlace(e, x, y, z, yaw, bone, id)
+  local k = id and SodCoop.zKick[id]
+  if k then
+    x, y = x + k.x, y + k.y
+    k.x, k.y = k.x * 0.85, k.y * 0.85
+    if k.x * k.x + k.y * k.y < 0.0004 then SodCoop.zKick[id] = nil end
+  end
   e:SetWorldAngles({ x = 0, y = 0, z = yaw })
   e:SetWorldPos({ x = x, y = y, z = z })
   if bone ~= "" then
@@ -412,7 +423,7 @@ end
 function SodCoop.ZMoveAll(d, bone)
   for i = 1, #d, 5 do
     local e = SodCoop.zp[d[i]]
-    if e and System.GetEntity(e.id) then SodCoop.ZPlace(e, d[i + 1], d[i + 2], d[i + 3], d[i + 4], bone) end
+    if e and System.GetEntity(e.id) then SodCoop.ZPlace(e, d[i + 1], d[i + 2], d[i + 3], d[i + 4], bone, d[i]) end
   end
 end
 )lua";
