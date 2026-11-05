@@ -78,7 +78,7 @@ Detalhes técnicos e histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
 
 ## 🛡️ Antivírus (VirusTotal)
 
-Os arquivos do pacote de 04/11/2026 foram analisados no VirusTotal: **4 de cerca de 70 antivírus** marcaram cada um, todos com alertas automáticos (aprendizado de máquina e reputação), nenhum apontando vírus conhecido. Hashes, links, prints e o motivo dos alertas estão em [docs/VIRUSTOTAL.md](docs/VIRUSTOTAL.md) (em inglês e português).
+Os arquivos do pacote atual foram analisados no VirusTotal: **3 de 71 antivírus** marcaram o mod (dinput8.dll) e **5 de 70** a janela (SoDCoop.exe), todos com alertas automáticos (aprendizado de máquina e reputação), nenhum apontando vírus conhecido. Hashes, links, prints e o motivo dos alertas estão em [docs/VIRUSTOTAL.md](docs/VIRUSTOTAL.md) (em inglês e português).
 
 ## 🖥️ Mod à parte: resolução 2560×1440
 
