@@ -1,4 +1,4 @@
-# State of Decay: Year-One — Co-op Mod (protótipo)
+# State of Decay: Year-One — Co-op Mod (versão 0.1.0, protótipo)
 
 Co-op para **duas pessoas** no modo **Breakdown** do State of Decay: Year-One Survival Edition (Steam, versão **845221**).
 
@@ -80,6 +80,7 @@ Com `transport=udp`, a conexão é direta:
 - As ações das instalações (fabricar, cozinhar, treinar) rodam só em quem as começou.
 - A comunidade (moral, ferimentos, sobreviventes) é simulada separadamente em cada PC.
 - Se o host morrer, vale a regra normal do jogo para o save dele.
+- O jogo do host pode fechar quando o client mata um zumbi. A versão 0.1.0 traz uma correção para isso que ainda não foi testada numa partida real. Se acontecer, mande o `sodcoop_default.log` do host.
 - Só funciona na versão **845221** do jogo na Steam. Em outra versão, o mod se desliga sozinho e registra o motivo no log.
 
 ---

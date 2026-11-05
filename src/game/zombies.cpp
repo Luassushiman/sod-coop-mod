@@ -642,29 +642,22 @@ void updateHost(const Config& cfg, bool inWorld, const engine::Vec3& self, bool 
                               !readable ? "sem ator" : a[0x17A9] ? "sem maquina de estados" : "vida 0");
                 continue;
             }
-            // Golpe que não mata: SetHealth nativo (vtable +0x5C) no mesmo ator conferido acima,
-            // sem passar pelo Lua. O Lua só entra para matar (Kill) e para a reação.
-            if (health - hit.damage > 0) {
-                using SetHealth_t = void(__thiscall*)(void*, float);
-                void* const* vt = *reinterpret_cast<void* const* const*>(actor);
-                log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: vida %.0f -> %.0f (nativo, flag %d)",
-                          hit.kind ? "tiro" : "corpo a corpo", hit.damage, hit.zombieId, health,
-                          health - hit.damage, a[0x17A9]);
-                reinterpret_cast<SetHealth_t>(vt[engine::vt::kActor_SetHealth / 4])(actor, health - hit.damage);
-                char react[64];
-                snprintf(react, sizeof(react), "SodCoop.ZHitReact(%u)", hit.zombieId);
-                engine::executeLua(react, "sodcoop_zreact");
-                continue;
-            }
+            // SetHealth nativo (vtable +0x5C) no mesmo ator conferido acima, sem passar pelo Lua.
+            // Golpe que mata também: o Kill do Lua fechou o host duas vezes (assert 0x0138C980, em
+            // 2026-11-04 22:47 e 2026-11-05 00:23, os dois em zumbis conduzidos pelo mod), mesmo com
+            // a conferência acima passando um instante antes. Vida 0 direto não passa pelo Kill.
+            using SetHealth_t = void(__thiscall*)(void*, float);
+            void* const* vt = *reinterpret_cast<void* const* const*>(actor);
+            const float after = health - hit.damage > 0 ? health - hit.damage : 0.0f;
+            log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: vida %.0f -> %.0f (nativo, flag %d)",
+                      hit.kind ? "tiro" : "corpo a corpo", hit.damage, hit.zombieId, health, after, a[0x17A9]);
+            reinterpret_cast<SetHealth_t>(vt[engine::vt::kActor_SetHealth / 4])(actor, after);
+            char react[64];
+            snprintf(react, sizeof(react), after > 0 ? "SodCoop.ZHitReact(%u)" : "SodCoop.zc[%u] = nil",
+                     hit.zombieId);
+            engine::executeLua(react, "sodcoop_zreact");
+            continue;
         }
-        char expr[96];
-        snprintf(expr, sizeof(expr), "SodCoop.ZDamage(%u, %.1f)", hit.zombieId, hit.damage);
-        // Antes de aplicar: se o jogo fechar dentro do ZDamage, o log mostra em qual zumbi.
-        log::info("zombies: aplicando golpe do cliente no zumbi %u", hit.zombieId);
-        std::string result;
-        puppet::readLuaText(expr, result);
-        log::info("zombies: golpe do cliente (%s, %.0f) no zumbi %u: %s", hit.kind ? "tiro" : "corpo a corpo",
-                  hit.damage, hit.zombieId, result.c_str());
     }
     updateChase(cfg, now, self, otherValid, other);
     if (now < next) return;

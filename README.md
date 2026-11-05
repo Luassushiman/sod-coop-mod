@@ -78,7 +78,7 @@ Detalhes técnicos e histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
 
 ## 🛡️ Antivírus (VirusTotal)
 
-Os arquivos do pacote atual foram analisados no VirusTotal: **3 de 71 antivírus** marcaram o mod (dinput8.dll) e **5 de 70** a janela (SoDCoop.exe), todos com alertas automáticos (aprendizado de máquina e reputação), nenhum apontando vírus conhecido. Hashes, links, prints e o motivo dos alertas estão em [docs/VIRUSTOTAL.md](docs/VIRUSTOTAL.md) (em inglês e português).
+Os arquivos da versão 0.1.0 foram analisados no VirusTotal: **4 de 71 antivírus** marcaram o mod (`dinput8.dll`) e **5 de 70** a janela (`SoDCoop.exe`), todos com alertas automáticos (aprendizado de máquina e reputação), nenhum apontando vírus conhecido. Hashes, links, prints e o motivo dos alertas estão em [docs/VIRUSTOTAL.md](docs/VIRUSTOTAL.md) (em inglês e português).
 
 ## 🖥️ Mod à parte: resolução 2560×1440
 

@@ -64,7 +64,7 @@ Zips originais em `tools\downloads\`.
 
 Correções de ambiente (2026-11-01):
 - O Ghidra 12.2 exige **JDK 25**, e o JDK 21 baixado inicialmente foi removido. Agora está instalado o Temurin 25.0.5+8 em `tools\jdk\jdk-25.0.5+8`, com zip `OpenJDK25U-jdk_x64_windows_hotspot_25.0.5_8.zip` e SHA-256 `636bdc13dc649ddc7d5921c5c7d23cca6e44fd19d662b45cc9c02135a6c96c42`, igual ao oficial.
-- Processos iniciados a partir do app Claude (empacotado como MSIX) veem `AppData\Roaming` **redirecionado** para `AppData\Local\Packages\Claude_…\LocalCache\Roaming`. Isso faz o caminho canônico diferir do absoluto, e o OSGi/Felix do Ghidra aborta com "The data file must be inside the data dir". Para contornar, `tools\ghidra\ghidra_12.2_PUBLIC\support\launch.properties` ganhou uma linha `VMARGS=-Dapplication.settingsdir=C:/Users/luanl/sodcoop_ghidra`. Essa pasta guarda só configurações e cache do Ghidra e pode ser apagada.
+- Processos iniciados a partir do app Claude (empacotado como MSIX) veem `AppData\Roaming` **redirecionado** para `AppData\Local\Packages\Claude_…\LocalCache\Roaming`. Isso faz o caminho canônico diferir do absoluto, e o OSGi/Felix do Ghidra aborta com "The data file must be inside the data dir". Para contornar, `tools\ghidra\ghidra_12.2_PUBLIC\support\launch.properties` ganhou uma linha `VMARGS=-Dapplication.settingsdir=C:/Users/<usuario>/sodcoop_ghidra`. Essa pasta guarda só configurações e cache do Ghidra e pode ser apagada.
 - Execução headless (projeto em `analysis\ghidra_project`, scripts em `analysis\ghidra_scripts`, saídas em `analysis\out`, logs em `analysis\logs`):
   ```
   set JAVA_HOME=<projeto>\tools\jdk\jdk-25.0.5+8
