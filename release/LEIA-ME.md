@@ -71,6 +71,7 @@ Com `transport=udp`, a conexão é direta:
 - Base: armário de suprimentos, recursos e construções (construir, terminar, melhorar, demolir) iguais nos dois.
 - Hora do dia, lugares já vasculhados e itens dados ao outro jogador.
 - O save do host vai sozinho para o client ao conectar.
+- **F7** abre o menu para escolher outro sobrevivente (setas, Enter troca); **F6** volta direto para o anterior. O outro jogador vê a aparência nova.
 - **2560×1440** no menu de opções, em 16:9.
 
 ## Limitações conhecidas

@@ -71,6 +71,7 @@ With `transport=udp`, the connection is direct:
 - Base: supply locker, resources and facilities (build, finish, upgrade, demolish) are the same on both PCs.
 - Time of day, already-searched places and items given to the other player.
 - The host's save goes to the client by itself when they connect.
+- **F7** opens a menu to pick another survivor (arrows, Enter switches); **F6** goes straight back to the previous one. The other player sees the new look.
 - **2560×1440** in the options menu, at 16:9.
 
 ## Known limitations

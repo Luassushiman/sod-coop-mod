@@ -34,6 +34,28 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 - [x] Zumbis do host aparecem no mundo do cliente
 - [x] Golpes e tiros do cliente ferem e matam os zumbis do host
 
+## 🎭 Trocar de personagem (F7)
+
+Cada jogador pode escolher com qual sobrevivente quer jogar, a qualquer momento, sem voltar à base. Assim o host e o amigo não precisam jogar com o mesmo personagem.
+
+- **F7** abre o menu **ESCOLHER SOBREVIVENTE**, com a lista de sobreviventes do jogo (homem ou mulher e a roupa de cada um).
+- **Setas** escolhem, **PgUp/PgDn** pulam 10 de uma vez, **Enter** troca e **F7** fecha. O personagem atual aparece marcado como "(atual)".
+- **F6** troca direto para o sobrevivente anterior, sem abrir o menu.
+- O outro jogador vê a aparência nova no seu personagem.
+- As teclas podem ser trocadas no `sodcoop.ini`, seção `[keys]` (`next_member` e `prev_member`).
+
+<div align="center">
+
+<img src="docs/assets/trocar_personagem_menu.jpg" alt="Menu ESCOLHER SOBREVIVENTE aberto com F7" width="720">
+
+*O menu aberto com F7: a lista de sobreviventes, com o atual marcado.*
+
+<img src="docs/assets/trocar_personagem_1.jpg" alt="Depois de trocar: homem de jaqueta jeans" width="360"> <img src="docs/assets/trocar_personagem_2.jpg" alt="Depois de trocar: mulher de jaqueta de couro" width="360">
+
+*Dois personagens escolhidos pelo menu, no mesmo lugar do mundo.*
+
+</div>
+
 ## 🛠️ Próximos passos
 
 - [ ] Dano dos golpes
