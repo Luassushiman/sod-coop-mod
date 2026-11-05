@@ -42,6 +42,7 @@ O client precisa carregar **o mesmo save do host**, e o mod faz isso sozinho:
 - Antes de gravar, o mod guarda o save do client em `sodcoop_save_backups\<data_hora>\`, na pasta do jogo (os 20 mais recentes). Para voltar ao seu save solo, copie os arquivos de lá para `USER\<número>\`.
 - Se o save do client já for igual ao do host, nada é gravado.
 - O host precisa já ter jogado o Breakdown e estar no mundo, para o save existir no disco.
+- Se o client clicar em **Continuar** antes de conectar ao host, ele entra com o save dele mesmo, e o mod não grava nada naquela vez. Feche o jogo e abra de novo para receber o save do host.
 
 Para fazer como antes, à mão, ponha `sync_save=0` na seção `[net]` do `sodcoop.ini` do client e copie os arquivos `Sandbox*.ulsave` e `UserStats-dlc.cfg` da pasta `USER\<número>\` do host para a mesma pasta do client.
 

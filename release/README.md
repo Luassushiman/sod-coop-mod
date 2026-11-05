@@ -42,6 +42,7 @@ The client must load **the host's save**, and the mod does it by itself:
 - Before writing, the mod backs up the client's save to `sodcoop_save_backups\<date_time>\` in the game folder (the 20 most recent). To go back to your solo save, copy those files into `USER\<number>\`.
 - If the client's save already matches the host's, nothing is written.
 - The host must have played Breakdown already and be in the world, so the save exists on disk.
+- If the client clicks **Continue** before connecting to the host, they load their own save and the mod writes nothing that time. Close the game and start it again to receive the host's save.
 
 To do it by hand as before, set `sync_save=0` in the `[net]` section of the client's `sodcoop.ini` and copy the `Sandbox*.ulsave` and `UserStats-dlc.cfg` files from the host's `USER\<number>\` folder into the same folder on the client.
 

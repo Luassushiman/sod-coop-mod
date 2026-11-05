@@ -17,22 +17,33 @@ Jogue o modo **Breakdown** junto com um amigo: dois sobreviventes no mesmo mundo
 
 ## 📌 Sobre
 
-O State of Decay original é single-player. Este mod adiciona uma camada de rede ao jogo por meio de uma DLL própria, sem alterar os arquivos originais. Cada jogador vê o outro dentro do mundo, com movimento e animação sincronizados.
+O State of Decay original é single-player. Este mod adiciona uma camada de rede ao jogo por meio de uma DLL própria (`dinput8.dll`), sem alterar nenhum arquivo original. Dois jogadores jogam o mesmo Breakdown: um é o **host**, que cria a partida, e o outro é o **client**, que entra nela.
 
-> ⚠️ **Projeto em desenvolvimento.** Ainda é um protótipo: por enquanto são sincronizados os jogadores (movimento, golpes, armas e mira) e a posição dos zumbis. Dano, inventário e veículos ainda não.
+> ⚠️ **Protótipo jogável.** Já dá para jogar junto, mas ainda há limitações (veja abaixo). Faça backup dos seus saves antes de usar. Só funciona na versão **845221** do jogo na Steam.
+
+## 🎮 Como jogar (resumo)
+
+1. **Instale nos dois PCs:** copie `dinput8.dll`, `SoDCoop.exe` e `sodcoop.ini` para a pasta do jogo (a do `StateOfDecay.exe`).
+2. **Configure no SoDCoop.exe:** um escolhe **Criar a partida** (host) e o outro **Entrar na partida do amigo** (client). Pela **Steam** (recomendado, sem abrir porta), cada um põe o SteamID64 do outro; a janela mostra o seu, com botão de copiar. Por **IP direto**, o host pode testar a porta por UPnP.
+3. **O host** clica em **Salvar e jogar** e entra no Breakdown em **Continuar**.
+4. **O client**, com o host já no mundo, clica em **Salvar e jogar**. No menu, o mod **recebe sozinho o save do host** (com backup do save do client). Espere o aviso **"save do host recebido. Pode clicar em Continuar"** no canto da tela e clique em **Continuar**. O client aparece ao lado do host.
+
+Passo a passo completo, com a configuração à mão e o jogo pela internet: [release/LEIA-ME.md](release/LEIA-ME.md) (português) e [release/README.md](release/README.md) (inglês). Os dois vão no pacote.
 
 ## ✅ O que já funciona
 
-- [x] Duas instâncias do jogo abertas ao mesmo tempo, no modo Breakdown
-- [x] Conexão host ↔ cliente pela rede (UDP)
-- [x] Cliente entra na sessão do host
-- [x] Posição e rotação dos jogadores sincronizadas (20 atualizações/s, interpoladas)
-- [x] O outro jogador aparece no seu mundo como personagem animado (parado, andando, correndo, sprint)
-- [x] Golpes, pulos e quedas do outro jogador aparecem no personagem dele (ainda sem dano)
-- [x] A arma que o outro jogador está usando aparece na mão dele
-- [x] Mira, tiro e recarga do outro jogador aparecem no personagem dele
-- [x] Zumbis do host aparecem no mundo do cliente
-- [x] Golpes e tiros do cliente ferem e matam os zumbis do host
+- [x] Conexão pela **Steam** (sem abrir porta) ou por **IP direto**, com UPnP para o host abrir a porta sozinho
+- [x] Janela **SoDCoop.exe** para configurar e abrir o jogo, em português e inglês
+- [x] **Save do host enviado ao client** ao conectar, ainda no menu, com backup do save do client
+- [x] Os dois jogadores se veem, com movimento, golpes, pulos, arma na mão, mira, tiro e recarga
+- [x] Zumbis do host aparecem para o client, perseguem e atacam os dois
+- [x] Golpes, tiros, granadas e Molotov do client ferem e matam os zumbis
+- [x] O client não morre de verdade: cai e volta ao lado do host
+- [x] Carro: dirigir, ir de passageiro e rodas girando
+- [x] Base igual nos dois: armário de suprimentos, recursos e construções (construir, terminar, melhorar, demolir)
+- [x] Hora do dia, lugares já vasculhados e itens dados ao outro jogador
+- [x] Troca de personagem pelo menu do **F7** (abaixo)
+- [x] **2560×1440** no menu de opções, em 16:9
 
 ## 🎭 Trocar de personagem (F7)
 
@@ -56,15 +67,12 @@ Cada jogador pode escolher com qual sobrevivente quer jogar, a qualquer momento,
 
 </div>
 
-## 🛠️ Próximos passos
+## 🛠️ Limitações e próximos passos
 
-- [ ] Dano dos golpes
-- [x] Zumbis do host perseguem e golpeiam o jogador do cliente
-- [x] Cliente carrega o mesmo save do host e nasce ao lado dele
-- [ ] Mundo do host sincronizado ao vivo (itens, carros, base, comunidade, hora)
-- [ ] Inventário e itens
-- [ ] Veículos
-- [ ] Conexão pela internet (Steam), sem precisar abrir portas
+- [ ] Ações das instalações (fabricar, cozinhar, treinar) sincronizadas: hoje rodam só em quem as começou
+- [ ] Comunidade (moral, ferimentos, sobreviventes) igual nos dois: hoje cada PC simula a sua
+- [ ] Mudar a base de lugar com os dois jogando (ainda não testado)
+- [ ] Teste com duas contas Steam diferentes pela internet
 
 Detalhes técnicos e histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
 
@@ -101,12 +109,12 @@ a0c80cfc-ec1f-4183-9b24-1c29d5a50471
 
 | Pasta/arquivo | Conteúdo |
 |---|---|
-| `src/` | DLL do mod (proxy de `dinput8.dll`, x86): `core/` (log, configuração, relógio, janela), `game/` (motor, jogador local, personagem remoto, hooks por frame), `net/` (protocolo UDP e sessão), `proxy/` |
+| `src/` | DLL do mod (proxy de `dinput8.dll`, x86): `core/` (log, configuração, relógio, janela), `game/` (motor, jogador local, personagem remoto, hooks por frame), `net/` (protocolo, sessão por UDP ou Steam, UPnP e envio do save), `proxy/` |
 | `build.ps1` | Compila `build\dinput8.dll` |
 | `launcher/` / `build_launcher.ps1` | SoDCoop.exe: janela para configurar o co-op (host/client, Steam/IP, UPnP) e abrir o jogo |
 | `mods/resolution_1440p/` | Mod à parte que põe 2560×1440 no menu de opções (sem o co-op) |
 | `install.ps1` | Instala/remove o mod nas cópias de teste |
-| `package.ps1` / `release/` | Gera o pacote para jogar (`build\release\sodcoop-<data>.zip`: DLL, `sodcoop.ini` modelo e LEIA-ME) |
+| `package.ps1` / `release/` | Gera o pacote para jogar (`build\release\sodcoop-<data>.zip`: DLL, SoDCoop.exe, `sodcoop.ini` modelo, LEIA-ME e README em inglês) |
 | `launch.ps1` / `tile_windows.ps1` | Abre as duas cópias do jogo lado a lado |
 | `analysis/` | Scripts de engenharia reversa (Ghidra) |
 | `tools/analysis/` | Scripts de análise dos arquivos do jogo |
