@@ -46,6 +46,10 @@ O State of Decay original é single-player. Este mod adiciona uma camada de rede
 
 Detalhes técnicos e histórico em [docs/PROGRESSO.md](docs/PROGRESSO.md).
 
+## 🛡️ Antivírus (VirusTotal)
+
+Os arquivos do pacote de 04/11/2026 foram analisados no VirusTotal: **4 de cerca de 70 antivírus** marcaram cada um, todos com alertas automáticos (aprendizado de máquina e reputação), nenhum apontando vírus conhecido. Hashes, links, prints e o motivo dos alertas estão em [docs/VIRUSTOTAL.md](docs/VIRUSTOTAL.md) (em inglês e português).
+
 ## 🖥️ Mod à parte: resolução 2560×1440
 
 O menu de opções do jogo não tem **2560×1440** em 16:9: depois de 1920×1080, ele pula direto para 4K. O mod de co-op **já inclui** a correção, e ela também existe como **mod separado**, só com isso, para quem quiser apenas a resolução: [mods/resolution_1440p](mods/resolution_1440p/README.md).
