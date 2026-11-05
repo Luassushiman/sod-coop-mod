@@ -17,6 +17,8 @@ Copy-Item "$root\build\SoDCoop.exe" $stage
 Copy-Item "$root\release\sodcoop.ini" $stage
 Copy-Item "$root\release\LEIA-ME.md" $stage
 Copy-Item "$root\release\README.md" $stage
+# A licença da MinHook (BSD-2) exige o aviso de copyright junto do binário.
+Copy-Item "$root\release\THIRD_PARTY_NOTICES.txt" $stage
 $name = if ($Version) { "v$Version" } else { Get-Date -Format yyyyMMdd }
 $zip = "$root\build\release\sodcoop-$name.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }

@@ -10,6 +10,7 @@ Co-op for **two players** in the **Breakdown** mode of State of Decay: Year-One 
 |---|---|
 | `dinput8.dll` | The mod. The game loads it automatically when it is in the game folder. |
 | `SoDCoop.exe` | A window to set up co-op and launch the game, so you don't have to edit the `.ini`. |
+| `THIRD_PARTY_NOTICES.txt` | License notice of MinHook, the library the mod uses to hook the game. |
 | `sodcoop.ini` | Settings: who is the host, who is the client, IP and port. The window saves here. |
 
 ## Installation (on both PCs)

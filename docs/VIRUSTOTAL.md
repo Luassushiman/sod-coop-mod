@@ -12,7 +12,7 @@ I scanned the files of release **v0.1.0** (`sodcoop-v0.1.0.zip`, 2026-11-05) on 
 |---|---|---|---|
 | `dinput8.dll` (the mod) | `76e5486641ee201f4e561476e45ef20cf9f1e8b1f9c76a4e496c27286a5ee862` | 4 of 71: Cynet (`Malicious (score: 100)`), McAfee Scanner (`Ti!76E5486641EE`), Microsoft (`Trojan:Win32/Wacatac.B!ml`), SecureAge (`Malicious`) | [open report](https://www.virustotal.com/gui/file/76e5486641ee201f4e561476e45ef20cf9f1e8b1f9c76a4e496c27286a5ee862) |
 | `SoDCoop.exe` (the setup window) | `919296f15141e05f01fee417464592680ba3330c81c523348964cc715d669099` | 5 of 70: Bkav Pro (`W32.Malware…`), McAfee Scanner (`Ti!919296F15141`), Microsoft (`Program:Win32/Wacapew.C!ml`), SecureAge (`Malicious`), Trapmine (`Malicious.moderate.ml.score`) | [open report](https://www.virustotal.com/gui/file/919296f15141e05f01fee417464592680ba3330c81c523348964cc715d669099) |
-| `sodcoop-v0.1.0.zip` (the package) | `c1c7ba4241b19782e46123d09ba2a48ea00f656c3ef5d5233655b234c31b31ad` | not uploaded; it holds the two files above plus text files | — |
+| `sodcoop-v0.1.0.zip` (the package) | `1c55c0a018cc74e524100bb64c7f401142c48332957e9a19b6253345db17f652` | not uploaded; it holds the two files above plus text files (including the MinHook license notice) | — |
 
 To check that your copy is the same file, open PowerShell in the folder and compare the output with the table:
 
@@ -71,7 +71,7 @@ Analisei no VirusTotal os arquivos da versão **0.1.0** (`sodcoop-v0.1.0.zip`, 0
 |---|---|---|---|
 | `dinput8.dll` (o mod) | `76e5486641ee201f4e561476e45ef20cf9f1e8b1f9c76a4e496c27286a5ee862` | 4 de 71: Cynet (`Malicious (score: 100)`), McAfee Scanner (`Ti!76E5486641EE`), Microsoft (`Trojan:Win32/Wacatac.B!ml`), SecureAge (`Malicious`) | [abrir relatório](https://www.virustotal.com/gui/file/76e5486641ee201f4e561476e45ef20cf9f1e8b1f9c76a4e496c27286a5ee862) |
 | `SoDCoop.exe` (a janela de configuração) | `919296f15141e05f01fee417464592680ba3330c81c523348964cc715d669099` | 5 de 70: Bkav Pro (`W32.Malware…`), McAfee Scanner (`Ti!919296F15141`), Microsoft (`Program:Win32/Wacapew.C!ml`), SecureAge (`Malicious`), Trapmine (`Malicious.moderate.ml.score`) | [abrir relatório](https://www.virustotal.com/gui/file/919296f15141e05f01fee417464592680ba3330c81c523348964cc715d669099) |
-| `sodcoop-v0.1.0.zip` (o pacote) | `c1c7ba4241b19782e46123d09ba2a48ea00f656c3ef5d5233655b234c31b31ad` | não enviado; contém os dois arquivos acima e arquivos de texto | — |
+| `sodcoop-v0.1.0.zip` (o pacote) | `1c55c0a018cc74e524100bb64c7f401142c48332957e9a19b6253345db17f652` | não enviado; contém os dois arquivos acima e arquivos de texto (inclusive o aviso de licença da MinHook) | — |
 
 Para conferir se a sua cópia é o mesmo arquivo, abra o PowerShell na pasta e compare com a tabela:
 
