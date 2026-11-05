@@ -34,6 +34,7 @@
 #include "game/loot.h"
 #include "game/puppet.h"
 #include "game/remote_player.h"
+#include "game/save_gate.h"
 #include "game/appearance.h"
 #include "game/member_menu.h"
 #include "game/vehicles.h"
@@ -510,6 +511,61 @@ void detectLocalAttacks(bool settled, const local_player::Snapshot& s, const net
     lastShots = g_gunShots;
 }
 
+// Save do host (cliente): avisa a rede quando o mundo começa a carregar (daí em diante o
+// save recebido não é gravado) e, no menu, mostra no canto da tela se já pode clicar em
+// Continuar. Texto 2D do próprio jogo, como em member_menu.cpp.
+void showSaveSync(bool worldLoaded) {
+    static bool everLoaded = false;
+    if (worldLoaded) everLoaded = true;
+    net::setSaveSyncAllowed(!everLoaded);
+    if (everLoaded || g_cfg.net.role != net::Role::Client) return;
+    const net::SaveSyncStatus st = net::getSaveSyncStatus();
+    const bool pt = g_cfg.portuguese;
+    char line1[160] = {}, line2[160] = {};
+    float r = 1, g = 1, b = 1;
+    switch (st.phase) {
+        case net::SavePhase::Waiting:
+            snprintf(line1, sizeof(line1), "%s",
+                     pt ? "CO-OP: esperando o host para receber o save..." : "CO-OP: waiting for the host to send the save...");
+            snprintf(line2, sizeof(line2), "%s", pt ? "Espere antes de clicar em Continuar." : "Wait before clicking Continue.");
+            g = 0.8f, b = 0.3f;
+            break;
+        case net::SavePhase::Receiving:
+            snprintf(line1, sizeof(line1), pt ? "CO-OP: recebendo o save do host... %d%%" : "CO-OP: receiving the host's save... %d%%",
+                     st.percent);
+            snprintf(line2, sizeof(line2), "%s", pt ? "Espere antes de clicar em Continuar." : "Wait before clicking Continue.");
+            g = 0.8f, b = 0.3f;
+            break;
+        case net::SavePhase::Done:
+            snprintf(line1, sizeof(line1), "%s",
+                     pt ? "CO-OP: save do host recebido. Pode clicar em Continuar." : "CO-OP: host's save received. You can click Continue.");
+            r = 0.5f, b = 0.5f;
+            break;
+        case net::SavePhase::Same:
+            snprintf(line1, sizeof(line1), "%s",
+                     pt ? "CO-OP: o save daqui bate com o do host. Pode clicar em Continuar."
+                        : "CO-OP: your save already matches the host's. You can click Continue.");
+            r = 0.5f, b = 0.5f;
+            break;
+        case net::SavePhase::Failed:
+            snprintf(line1, sizeof(line1), "%s",
+                     pt ? "CO-OP: falha ao receber o save do host (veja o log sodcoop)."
+                        : "CO-OP: failed to receive the host's save (see the sodcoop log).");
+            snprintf(line2, sizeof(line2), "%s", st.detail.c_str());
+            g = 0.4f, b = 0.4f;
+            break;
+        default:
+            return;
+    }
+    void* renderer = engine::gEnvField(0x10);  // IRenderer
+    if (!engine::looksLikeObject(renderer)) return;
+    using Draw_t = void(__cdecl*)(void*, float, float, float, const float*, bool, const char*, ...);
+    const auto drawText = reinterpret_cast<Draw_t>(0x00473160);
+    const float color[4] = {r, g, b, 1.0f}, grey[4] = {0.85f, 0.85f, 0.85f, 1.0f};
+    drawText(renderer, 40.0f, 30.0f, 2.0f, color, false, "%s", line1);
+    if (line2[0]) drawText(renderer, 40.0f, 55.0f, 1.6f, grey, false, "%s", line2);
+}
+
 // Thread principal do jogo, uma vez por frame.
 void onFrame() {
     crash_log::ensureInstalled();  // o jogo pode trocar o filtro depois de iniciar
@@ -587,6 +643,7 @@ void onFrame() {
         lastId = id;
         idSince = now;
     }
+    showSaveSync(id != 0);
 
     local_player::Snapshot s;
     const bool inWorld = id && local_player::sample(s);
@@ -769,6 +826,8 @@ DWORD WINAPI initThread(LPVOID) {
     if (g_cfg.mirrorLocal && g_cfg.net.role != net::Role::Off)
         log::warn("mirror_local ignorado: so funciona com [net] role=off");
     if (!isSupportedBuild()) return 0;
+    // Antes de o jogo ler o save: no cliente, a leitura espera o save do host chegar.
+    save_gate::install(g_cfg.net.role == net::Role::Client && g_cfg.net.syncSave);
 
     if (!waitFor(&engine::codeIsDecrypted, 120000, 10)) {
         log::error("codigo nao foi descriptografado em 120 s; abortando");

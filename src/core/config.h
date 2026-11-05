@@ -83,6 +83,8 @@ struct Config {
     // [video] width, height (0 = não mexe), fullscreen (1 = tela cheia, 0 = janela, -1 = não mexe):
     // resolução que o menu do jogo não lista (ex.: 2560x1440). Sem efeito quando [window] está ligado.
     int videoWidth = 0, videoHeight = 0, videoFullscreen = -1;
+    // Mensagens na tela em português ([launcher] language=pt; sem a chave, segue o Windows).
+    bool portuguese = false;
 };
 
 // Diretório do exe do jogo, com barra final (ex.: C:\...\testenv\host\).

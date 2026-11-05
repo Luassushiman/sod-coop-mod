@@ -28,6 +28,9 @@ struct SessionConfig {
     bool steam = false;
     uint64_t steamPeer = 0;  // [net] steam_peer: SteamID64 do outro jogador
     bool upnp = true;        // [net] upnp: host por UDP abre a porta no roteador sozinho
+    // [net] sync_save: o cliente recebe o save do Breakdown do host ao conectar, ainda no
+    // menu (net/save_transfer.h). O host sempre atende.
+    bool syncSave = true;
 };
 
 struct PlayerState {
@@ -92,6 +95,8 @@ struct HitEvent {
 
 bool start(const SessionConfig& cfg);
 void stop();
+// true depois que start() terminou (com sucesso ou não).
+bool started();
 
 void setLocalState(const PlayerState& s);
 RemoteState getRemoteState();
@@ -162,6 +167,27 @@ struct ZombieLook {
 void sendZombieLooks(const std::vector<ZombieLook>& looks);
 // Cliente: aparência recebida do zumbi `id` com esse hash; false se ainda não chegou.
 bool getZombieLook(uint32_t id, uint32_t hash, std::string& parts);
+
+// Save do host para o cliente (cliente com sync_save=1).
+enum class SavePhase {
+    Off,        // desligado (host, ou sync_save=0)
+    Waiting,    // esperando a conexão com o host
+    Receiving,  // recebendo (percent)
+    Done,       // save do host gravado: pode carregar
+    Same,       // o save daqui já era igual ao do host
+    Failed,     // não deu (detail)
+    TooLate,    // o mundo já tinha começado a carregar: não grava
+};
+struct SaveSyncStatus {
+    SavePhase phase = SavePhase::Off;
+    int percent = 0;
+    std::string detail;
+};
+SaveSyncStatus getSaveSyncStatus();
+// Cliente: false assim que o mundo começa a carregar (o save recebido depois disso não é gravado).
+void setSaveSyncAllowed(bool allowed);
+// Cliente: o jogo abriu o save para ler (game/save_gate). Daí em diante nada é gravado.
+void noteGameReadSave();
 
 // Aparência do jogador local ("anexo=arquivo;..."), enviada a cada 2 s.
 void setLocalLook(const std::string& parts);

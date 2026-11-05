@@ -85,6 +85,12 @@ Config loadConfig() {
     c.net.steam = readString(ini, L"net", L"transport", "udp") == "steam";
     c.net.upnp = GetPrivateProfileIntW(L"net", L"upnp", 1, ini.c_str()) != 0;
     c.net.steamPeer = strtoull(readString(ini, L"net", L"steam_peer", "0").c_str(), nullptr, 10);
+    c.net.syncSave = GetPrivateProfileIntW(L"net", L"sync_save", 1, ini.c_str()) != 0;
+    {
+        // Idioma das mensagens na tela: o mesmo da janela SoDCoop.exe; sem ele, o do Windows.
+        const std::string lang = readString(ini, L"launcher", L"language", "");
+        c.portuguese = lang.empty() ? PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_PORTUGUESE : lang == "pt";
+    }
 
     c.anim.idle = readString(ini, L"anim", L"idle", c.anim.idle);
     c.anim.walk = readString(ini, L"anim", L"walk", c.anim.walk);

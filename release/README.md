@@ -33,18 +33,24 @@ Co-op for **two players** in the **Breakdown** mode of State of Decay: Year-One 
 
 To remove the mod, delete `dinput8.dll`, `SoDCoop.exe` and `sodcoop.ini`. The game goes back to normal, and no original file is changed.
 
-## Before playing: the same world on both PCs
+## The same world on both PCs: automatic
 
-The client must load **the host's save**:
+The client must load **the host's save**, and the mod does it by itself:
 
-1. On the host's PC, take the `Sandbox*.ulsave` and `UserStats*.cfg` files from the `USER\<number>\` folder.
-2. On the client's PC, back up the client's own files, then copy the host's files into the same folder, `USER\<number>\`.
-3. Repeat this whenever the host plays alone, because the host's save changes.
+- When the client starts the game and connects, still in the main menu, the mod asks the host for the Breakdown save and writes it over the client's save. It takes a few seconds.
+- The progress shows in the top corner of the client's screen. Wait for **"host's save received. You can click Continue"** before clicking **Continue**.
+- Before writing, the mod backs up the client's save to `sodcoop_save_backups\<date_time>\` in the game folder (the 20 most recent). To go back to your solo save, copy those files into `USER\<number>\`.
+- If the client's save already matches the host's, nothing is written.
+- The host must have played Breakdown already and be in the world, so the save exists on disk.
+
+To do it by hand as before, set `sync_save=0` in the `[net]` section of the client's `sodcoop.ini` and copy the `Sandbox*.ulsave` and `UserStats-dlc.cfg` files from the host's `USER\<number>\` folder into the same folder on the client.
+
+> Steam Cloud may store the save the client received as if it were the client's own. That's what the backup in `sodcoop_save_backups` is for.
 
 ## How to play
 
 1. The **host** starts the game and enters Breakdown with **Continue**.
-2. Once the host is in the world, the **client** starts the game and enters with **Continue**. The client appears next to the host.
+2. Once the host is in the world, the **client** starts the game, waits for the message saying the host's save arrived, and enters with **Continue**. The client appears next to the host.
 3. The connection is automatic. The mod's log (`sodcoop_default.log`, in the game folder) shows `conectado=1` [connected].
 
 ### Over the internet
@@ -64,6 +70,7 @@ With `transport=udp`, the connection is direct:
 - Cars: driving, riding as a passenger and spinning wheels.
 - Base: supply locker, resources and facilities (build, finish, upgrade, demolish) are the same on both PCs.
 - Time of day, already-searched places and items given to the other player.
+- The host's save goes to the client by itself when they connect.
 - **2560×1440** in the options menu, at 16:9.
 
 ## Known limitations

@@ -10,6 +10,7 @@
 
 #include "core/clock.h"
 #include "core/log.h"
+#include "net/save_transfer.h"
 #include "net/steam_p2p.h"
 #include "net/upnp.h"
 #include "net/protocol.h"
@@ -71,6 +72,18 @@ bool g_haveInFacilities = false;       // protegido por g_lock
 std::vector<ZombieLook> g_outZombieLooks;           // host; protegido por g_lock
 std::map<uint32_t, ZombieLook> g_zombieLooks;       // cliente: id -> aparência; protegido por g_lock
 constexpr size_t kMaxZombieLooks = 512;
+// Save do host para o cliente (ver SaveReqPacket/SaveChunkPacket).
+std::vector<uint8_t> g_saveBundle;  // host: pacote montado (thread de rede)
+uint32_t g_saveId = 0, g_saveCrc = 0, g_saveBuiltMs = 0;
+SaveSyncStatus g_saveStatus;        // cliente; protegido por g_lock
+volatile bool g_saveAllowed = true;  // cliente: o mundo ainda não começou a carregar
+volatile bool g_saveReadByGame = false;  // cliente: o jogo já leu o save (não grava mais)
+uint32_t g_rxId = 0, g_rxCrc = 0, g_rxTotal = 0;  // cliente (thread de rede)
+uint16_t g_rxCount = 0, g_rxGot = 0;
+std::vector<uint8_t> g_rxBuf;
+uint8_t g_rxHave[kSaveMaxChunks / 8] = {};
+uint32_t g_localSaveCrc = 0;  // cliente: CRC do pacote montado com o save daqui
+bool g_localSaveKnown = false;
 volatile bool g_running = false;
 HANDLE g_thread = nullptr;
 
@@ -445,6 +458,143 @@ void handleZombieLook(const char* data, int size) {
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void setSaveStatus(SavePhase phase, int percent, const std::string& detail = std::string()) {
+    AcquireSRWLockExclusive(&g_lock);
+    g_saveStatus.phase = phase;
+    g_saveStatus.percent = percent;
+    g_saveStatus.detail = detail;
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+SavePhase savePhase() {
+    AcquireSRWLockShared(&g_lock);
+    const SavePhase p = g_saveStatus.phase;
+    ReleaseSRWLockShared(&g_lock);
+    return p;
+}
+
+bool saveActive() {
+    const SavePhase p = savePhase();
+    return p == SavePhase::Waiting || p == SavePhase::Receiving;
+}
+
+void sendSaveReq() {
+    SaveReqPacket p = {};
+    fillHeader(p.h, PacketType::SaveReq);
+    p.transferId = g_rxId;
+    memcpy(p.have, g_rxHave, sizeof(p.have));
+    send(&p, sizeof(p));
+}
+
+// Host: monta o pacote de novo quando o cliente começa (id 0, e o último tem mais de 5 s)
+// ou pede um pacote que não é o atual (o host reabriu). Responde com os pedaços que faltam.
+void handleSaveReq(const char* data) {
+    SaveReqPacket p;
+    memcpy(&p, data, sizeof(p));
+    const uint32_t now = GetTickCount();
+    const bool stale = p.transferId == 0 ? now - g_saveBuiltMs >= 5000 : p.transferId != g_saveId;
+    if (!g_saveId || stale) {
+        int files = 0;
+        const bool ok = save_transfer::buildBundle(g_saveBundle, files);
+        if (!ok || g_saveBundle.size() > static_cast<size_t>(kSaveMaxChunks) * kSaveChunkData) {
+            log::warn("save: o cliente pediu o save, mas %s", ok ? "ele e grande demais" : "nao ha save do Breakdown aqui");
+            g_saveBundle.clear();
+        }
+        g_saveCrc = g_saveBundle.empty() ? 0 : save_transfer::crc32(g_saveBundle.data(), g_saveBundle.size());
+        g_saveId = (now ^ g_myId ^ g_saveCrc) | 1;
+        g_saveBuiltMs = now;
+        if (!g_saveBundle.empty())
+            log::info("save: enviando o save ao cliente (%d arquivos, %u bytes, crc %08X)", files,
+                      static_cast<unsigned>(g_saveBundle.size()), g_saveCrc);
+    }
+    SaveChunkPacket c = {};
+    c.transferId = g_saveId;
+    c.totalSize = static_cast<uint32_t>(g_saveBundle.size());
+    c.crc = g_saveCrc;
+    c.count = static_cast<uint16_t>((g_saveBundle.size() + kSaveChunkData - 1) / kSaveChunkData);
+    if (!c.count) {  // sem save: um pedaço vazio avisa o cliente
+        fillHeader(c.h, PacketType::SaveChunk);
+        send(&c, static_cast<int>(offsetof(SaveChunkPacket, data)));
+        return;
+    }
+    const bool haveValid = p.transferId == g_saveId;
+    int sent = 0;
+    for (int i = 0; i < c.count && sent < kSaveChunksPerReq; ++i) {
+        if (haveValid && (p.have[i / 8] & (1 << (i % 8)))) continue;
+        const size_t off = static_cast<size_t>(i) * kSaveChunkData;
+        c.index = static_cast<uint16_t>(i);
+        c.len = static_cast<uint16_t>(std::min<size_t>(kSaveChunkData, g_saveBundle.size() - off));
+        memcpy(c.data, g_saveBundle.data() + off, c.len);
+        fillHeader(c.h, PacketType::SaveChunk);
+        send(&c, static_cast<int>(offsetof(SaveChunkPacket, data)) + c.len);
+        ++sent;
+    }
+}
+
+// Cliente: guarda o pedaço; com todos, confere o CRC e grava (se o mundo ainda não carregou).
+void handleSaveChunk(const char* data, int size) {
+    if (!saveActive()) return;
+    SaveChunkPacket p = {};
+    memcpy(&p, data, size < (int)sizeof(p) ? size : sizeof(p));
+    if (!p.count) {
+        log::warn("save: o host nao tem save do Breakdown para enviar");
+        setSaveStatus(SavePhase::Failed, 0, "host sem save");
+        return;
+    }
+    if (p.transferId != g_rxId) {
+        const uint32_t expected = (p.totalSize + kSaveChunkData - 1) / kSaveChunkData;
+        if (p.count > kSaveMaxChunks || p.count != expected) return;
+        g_rxId = p.transferId;
+        g_rxCrc = p.crc;
+        g_rxTotal = p.totalSize;
+        g_rxCount = p.count;
+        g_rxGot = 0;
+        g_rxBuf.assign(p.totalSize, 0);
+        memset(g_rxHave, 0, sizeof(g_rxHave));
+        if (g_localSaveKnown && p.crc == g_localSaveCrc) {
+            log::info("save: o save daqui ja e igual ao do host (crc %08X); nada a gravar", p.crc);
+            setSaveStatus(SavePhase::Same, 100);
+            return;
+        }
+        log::info("save: recebendo o save do host (%u bytes, %u pedacos, crc %08X)", p.totalSize, p.count, p.crc);
+    }
+    const size_t off = static_cast<size_t>(p.index) * kSaveChunkData;
+    if (p.index >= g_rxCount || off + p.len > g_rxTotal ||
+        p.len != std::min<size_t>(kSaveChunkData, g_rxTotal - off) ||
+        size < (int)offsetof(SaveChunkPacket, data) + p.len)
+        return;
+    if (!(g_rxHave[p.index / 8] & (1 << (p.index % 8)))) {
+        memcpy(g_rxBuf.data() + off, p.data, p.len);
+        g_rxHave[p.index / 8] |= static_cast<uint8_t>(1 << (p.index % 8));
+        ++g_rxGot;
+    }
+    if (g_rxGot < g_rxCount) {
+        setSaveStatus(SavePhase::Receiving, g_rxGot * 100 / g_rxCount);
+        return;
+    }
+    if (save_transfer::crc32(g_rxBuf.data(), g_rxBuf.size()) != g_rxCrc) {
+        log::warn("save: CRC do save recebido nao confere; pedindo de novo");
+        g_rxId = 0;
+        memset(g_rxHave, 0, sizeof(g_rxHave));
+        setSaveStatus(SavePhase::Receiving, 0);
+        return;
+    }
+    if (!g_saveAllowed) {
+        log::warn("save: save do host chegou depois de o mundo comecar a carregar; nao gravado");
+        setSaveStatus(SavePhase::TooLate, 100);
+        return;
+    }
+    std::string error;
+    if (save_transfer::applyBundle(g_rxBuf, error)) {
+        g_localSaveCrc = g_rxCrc;
+        g_localSaveKnown = true;
+        setSaveStatus(SavePhase::Done, 100);
+    } else {
+        log::error("save: nao foi possivel gravar o save do host: %s", error.c_str());
+        setSaveStatus(SavePhase::Failed, 100, error);
+    }
+}
+
 void setConnected(bool connected, uint32_t peerId) {
     AcquireSRWLockExclusive(&g_lock);
     g_remote.connected = connected;
@@ -549,6 +699,15 @@ void handlePacket(const char* data, int size, const Address& from) {
     }
     if (h.type == PacketType::Locker && size > (int)offsetof(LockerPacket, e)) {
         handleLocker(data, size);
+        return;
+    }
+    if (h.type == PacketType::SaveReq && g_cfg.role == Role::Host && size >= (int)sizeof(SaveReqPacket)) {
+        handleSaveReq(data);
+        return;
+    }
+    if (h.type == PacketType::SaveChunk && g_cfg.role == Role::Client &&
+        size >= (int)offsetof(SaveChunkPacket, data)) {
+        handleSaveChunk(data, size);
         return;
     }
     if (h.type == PacketType::Facilities && size >= (int)sizeof(FacilitiesPacket)) {
@@ -656,6 +815,16 @@ DWORD WINAPI netThread(LPVOID) {
             sendState();
             nextSend = (nowSec - nextSend > sendInterval) ? nowSec + sendInterval : nextSend + sendInterval;
         }
+        if (g_cfg.role == Role::Client && saveActive()) {
+            static uint32_t lastSaveReq = 0;
+            if (!g_saveAllowed) {
+                log::warn("save: o mundo comecou a carregar antes de o save do host chegar; segue com o save daqui");
+                setSaveStatus(SavePhase::TooLate, 0);
+            } else if (g_peerKnown && now - lastSaveReq >= 250) {
+                lastSaveReq = now;
+                sendSaveReq();
+            }
+        }
         if (g_peerKnown) sendHits();
         if (g_peerKnown) sendContainerPackets();
         if (g_peerKnown) sendGives();
@@ -694,7 +863,17 @@ DWORD WINAPI netThread(LPVOID) {
 
 }  // namespace
 
+volatile bool g_started = false;
+
+bool started() { return g_started; }
+
+// Marca started() ao sair de start(), qualquer que seja o caminho.
+struct StartedMark {
+    ~StartedMark() { g_started = true; }
+};
+
 bool start(const SessionConfig& cfg) {
+    StartedMark mark;
     g_cfg = cfg;
     if (cfg.role == Role::Off) {
         log::info("net: desligado (role=off)");
@@ -726,6 +905,18 @@ bool start(const SessionConfig& cfg) {
             return false;
         }
         log::info("net: cliente (id %08X) vai conectar em %s", g_myId, g_peerAddr.toString().c_str());
+    }
+    if (cfg.role == Role::Client && cfg.syncSave) {
+        std::vector<uint8_t> mine;
+        int files = 0;
+        if (save_transfer::buildBundle(mine, files)) {
+            g_localSaveCrc = save_transfer::crc32(mine.data(), mine.size());
+            g_localSaveKnown = true;
+        }
+        log::info("save: vai pedir o save do host (pasta daqui: %s; save atual %s, crc %08X)",
+                  save_transfer::saveDirectory().empty() ? "NAO ENCONTRADA" : "ok",
+                  g_localSaveKnown ? "encontrado" : "nenhum", g_localSaveCrc);
+        setSaveStatus(SavePhase::Waiting, 0);
     }
     timeBeginPeriod(1);  // resolução de 1 ms para o Sleep da thread de rede
     g_running = true;
@@ -899,6 +1090,20 @@ bool getZombieLook(uint32_t id, uint32_t hash, std::string& parts) {
     if (ok) parts = it->second.parts;
     ReleaseSRWLockShared(&g_lock);
     return ok;
+}
+
+SaveSyncStatus getSaveSyncStatus() {
+    AcquireSRWLockShared(&g_lock);
+    SaveSyncStatus s = g_saveStatus;
+    ReleaseSRWLockShared(&g_lock);
+    return s;
+}
+
+void setSaveSyncAllowed(bool allowed) { g_saveAllowed = allowed && !g_saveReadByGame; }
+
+void noteGameReadSave() {
+    g_saveReadByGame = true;
+    g_saveAllowed = false;
 }
 
 void setLocalLook(const std::string& parts) {

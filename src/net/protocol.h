@@ -7,7 +7,7 @@
 namespace sodcoop::net {
 
 inline constexpr uint32_t kMagic = 0x43444F53;  // "SODC"
-inline constexpr uint16_t kProtocolVersion = 25;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook; v24: pacotes Locker e Resources; v25: pacote Facilities
+inline constexpr uint16_t kProtocolVersion = 26;  // v2: speed; v3: timeMs; v4: action; v5: weapon; v6: base/upper; v7: aim; v8: aimPose; v9: Zombies; v10: ZombieEntry.model; v11: Hit; v12: Hit host -> cliente (ataque de zumbi); v13: State.dead; v14: ids de zumbi = EntityId (u32); v15: State.timeOfDay; v16: pacote Look; v17: Look com materiais (1200 bytes); v18: State.vehicle; v19: State.vehicleId; v20: State.vehicleName/passengerOf/passengerSeat; v21: pacotes Searched e Container; v22: pacote Give; v23: ZombieEntry.lookHash e pacote ZombieLook; v24: pacotes Locker e Resources; v25: pacote Facilities; v26: pacotes SaveReq e SaveChunk
 inline constexpr int kActionNameSize = 48;
 inline constexpr int kWeaponPathSize = 128;
 
@@ -28,6 +28,8 @@ enum class PacketType : uint8_t {
     Locker = 13,  // ambos: vagas do armário da base que mudaram (3x); host: todas a cada 5 s
     Resources = 14, // ambos: os 5 recursos do estoque da base (ao mudar, 3x; host a cada 5 s)
     Facilities = 15, // ambos: instalações das 32 vagas da base (ao mudar, 3x; host a cada 5 s)
+    SaveReq = 16,    // cliente -> host: pede o save (e os pedaços que faltam), a cada 250 ms
+    SaveChunk = 17,  // host -> cliente: um pedaço do save
 };
 
 #pragma pack(push, 1)
@@ -160,6 +162,26 @@ struct FacilitiesPacket {
     uint32_t facility[kBaseSockets];  // hash do FacilityId de cada vaga (0 = vazia)
     uint32_t variant[kBaseSockets];   // hash do VariantId (em construção, pronta, melhorias)
 };
+// Save do Breakdown (net/save_transfer.h), em pedaços. O cliente pede; o host responde com
+// até kSaveChunksPerReq pedaços que o cliente ainda não marcou em have[].
+inline constexpr int kSaveChunkData = 1100;
+inline constexpr int kSaveMaxChunks = 1024;  // até ~1,1 MB (o save do Breakdown tem ~200 KB)
+inline constexpr int kSaveChunksPerReq = 64;
+struct SaveReqPacket {
+    Header h;
+    uint32_t transferId;                  // do último SaveChunk recebido; 0 = começando
+    uint8_t have[kSaveMaxChunks / 8];     // bit n = pedaço n já recebido
+};
+struct SaveChunkPacket {
+    Header h;
+    uint32_t transferId;  // muda quando o host monta o pacote de novo
+    uint32_t totalSize;   // bytes do pacote inteiro
+    uint32_t crc;         // CRC-32 do pacote inteiro
+    uint16_t index;       // este pedaço
+    uint16_t count;       // total de pedaços
+    uint16_t len;         // bytes válidos em data
+    uint8_t data[kSaveChunkData];
+};
 struct ZombieLookPacket {
     Header h;
     uint32_t zombieId;      // ZombieEntry.id
@@ -173,5 +195,6 @@ static_assert(sizeof(ZombiesPacket) <= kMaxPacketSize, "pacote de zumbis maior q
 static_assert(sizeof(LookPacket) <= kMaxPacketSize, "pacote de aparencia maior que o buffer");
 static_assert(sizeof(LockerPacket) <= kMaxPacketSize, "pacote do armario maior que o buffer");
 static_assert(sizeof(ZombieLookPacket) <= kMaxPacketSize, "pacote de aparencia de zumbi maior que o buffer");
+static_assert(sizeof(SaveChunkPacket) <= 1200, "pedaco do save maior que o limite da Steam");
 
 }  // namespace sodcoop::net

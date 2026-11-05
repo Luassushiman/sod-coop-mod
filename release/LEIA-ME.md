@@ -33,18 +33,24 @@ Co-op para **duas pessoas** no modo **Breakdown** do State of Decay: Year-One Su
 
 Para remover, apague a `dinput8.dll`, o `SoDCoop.exe` e o `sodcoop.ini`. O jogo volta ao normal, e nenhum arquivo original é alterado.
 
-## Antes de jogar: o mesmo mundo nos dois
+## O mesmo mundo nos dois: automático
 
-O client precisa carregar **o mesmo save do host**:
+O client precisa carregar **o mesmo save do host**, e o mod faz isso sozinho:
 
-1. No PC do host, pegue na pasta `USER\<número>\` os arquivos `Sandbox*.ulsave` e `UserStats*.cfg`.
-2. No PC do client, faça backup dos dele e copie esses arquivos para a mesma pasta, `USER\<número>\`.
-3. Repita sempre que o host jogar sozinho, porque o save do host muda.
+- Quando o client abre o jogo e conecta, ainda no menu, o mod pede o save do Breakdown ao host e grava no lugar do save do client. Leva poucos segundos.
+- No canto superior da tela do client aparece o andamento. Espere a mensagem **"save do host recebido. Pode clicar em Continuar"** antes de clicar em **Continuar**.
+- Antes de gravar, o mod guarda o save do client em `sodcoop_save_backups\<data_hora>\`, na pasta do jogo (os 20 mais recentes). Para voltar ao seu save solo, copie os arquivos de lá para `USER\<número>\`.
+- Se o save do client já for igual ao do host, nada é gravado.
+- O host precisa já ter jogado o Breakdown e estar no mundo, para o save existir no disco.
+
+Para fazer como antes, à mão, ponha `sync_save=0` na seção `[net]` do `sodcoop.ini` do client e copie os arquivos `Sandbox*.ulsave` e `UserStats-dlc.cfg` da pasta `USER\<número>\` do host para a mesma pasta do client.
+
+> A nuvem da Steam pode guardar o save que o client recebeu como se fosse o save dele. O backup em `sodcoop_save_backups` existe para isso.
 
 ## Como jogar
 
 1. O **host** abre o jogo e entra no Breakdown, em **Continuar**.
-2. Depois que o host estiver no mundo, o **client** abre o jogo e entra em **Continuar**. Ele aparece ao lado do host.
+2. Depois que o host estiver no mundo, o **client** abre o jogo, espera o aviso de que o save do host chegou e entra em **Continuar**. Ele aparece ao lado do host.
 3. A conexão é automática. No log do mod (`sodcoop_default.log`, na pasta do jogo), aparece `conectado=1`.
 
 ### Pela internet
@@ -64,6 +70,7 @@ Com `transport=udp`, a conexão é direta:
 - Carro: dirigir, ir de passageiro e as rodas girando.
 - Base: armário de suprimentos, recursos e construções (construir, terminar, melhorar, demolir) iguais nos dois.
 - Hora do dia, lugares já vasculhados e itens dados ao outro jogador.
+- O save do host vai sozinho para o client ao conectar.
 - **2560×1440** no menu de opções, em 16:9.
 
 ## Limitações conhecidas
